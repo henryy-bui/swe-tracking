@@ -5,6 +5,8 @@ import { currentWeek, weekRange } from '@/lib/derive';
 import { addDays, downloadText, fmtDateLong, today } from '@/lib/date';
 import { PageHead, toast } from '@/components/ui';
 import { CloudSyncCard } from '@/components/CloudSync';
+import { progressReportMarkdown } from '@/lib/report';
+import { Download, FileText } from '@/components/icons';
 
 export default function Settings() {
   const data = useStore();
@@ -137,10 +139,20 @@ export default function Settings() {
         </dl>
         <div className="row" style={{ marginTop: 14 }}>
           <button className="btn" onClick={onExport}>
-            Export JSON
+            <Download size={15} /> Export JSON
           </button>
           <button className="btn" onClick={() => fileRef.current?.click()}>
             Import JSON…
+          </button>
+          <button
+            className="btn ghost"
+            onClick={() => {
+              downloadText(`swe-roadmap-report-${today()}.md`, progressReportMarkdown(data), 'text/markdown');
+              toast('Progress report downloaded');
+            }}
+            title="A Markdown summary of every phase, week, project, and resource"
+          >
+            <FileText size={15} /> Progress report (.md)
           </button>
           <input ref={fileRef} type="file" accept="application/json,.json" onChange={onImport} className="sr-only" aria-label="Import JSON file" />
         </div>

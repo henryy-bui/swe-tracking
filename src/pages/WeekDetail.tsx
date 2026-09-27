@@ -5,7 +5,9 @@ import { TOTAL_WEEKS, phaseOfWeek, projectById, weekDef } from '@/data/roadmap';
 import { currentWeek, isDone, isOverdue, minutesForRoadmapWeek, sortFollowUps, taskItems, weekProgress, weekRange, weekStatus } from '@/lib/derive';
 import { fmtDate, fmtHours, relDay, today } from '@/lib/date';
 import { EmptyState, PageHead, ProgressBar, StatusPill, toast } from '@/components/ui';
-import { AlertTriangle, ChevronLeft, ChevronRight, Star, X } from '@/components/icons';
+import { AlertTriangle, ChevronLeft, ChevronRight, Copy, Download, Star, X } from '@/components/icons';
+import { weekSummaryMarkdown } from '@/lib/report';
+import { downloadText } from '@/lib/date';
 
 export default function WeekDetail() {
   const { n } = useParams();
@@ -79,6 +81,17 @@ function WeekBody({ week }: { week: number }) {
     if ((data.weekNotes[String(week)] ?? '') !== note) {
       setWeekNote(week, note);
       toast('Notes saved');
+    }
+  };
+
+  const copySummary = async () => {
+    const md = weekSummaryMarkdown(data, week);
+    try {
+      await navigator.clipboard.writeText(md);
+      toast('Week summary copied as Markdown');
+    } catch {
+      downloadText(`week-${week}-summary.md`, md, 'text/markdown');
+      toast('Clipboard unavailable, downloaded instead');
     }
   };
 
@@ -391,6 +404,38 @@ function WeekBody({ week }: { week: number }) {
             </div>
           )}
           {data.logs.filter((l) => l.week === week).length === 0 && <EmptyState>No sessions logged for this week yet.</EmptyState>}
+
+          <div className="card">
+            <div className="card-head">
+              <h2>Week summary</h2>
+            </div>
+            <dl className="kv">
+              <dt>Items</dt>
+              <dd>
+                {wp.done} / {wp.total}
+              </dd>
+              <dt>Time</dt>
+              <dd>
+                {fmtHours(minutes)} in {data.logs.filter((l) => l.week === week).length} sessions
+              </dd>
+              <dt>Follow-ups</dt>
+              <dd>
+                {followUps.filter((f) => f.done).length} closed, {followUps.filter((f) => !f.done).length} open
+              </dd>
+              <dt>DSA</dt>
+              <dd>{(data.problems ?? []).filter((p) => p.week === week && p.status === 'solved').length} solved</dd>
+              <dt>Rating</dt>
+              <dd>{retro?.rating ? '★'.repeat(retro.rating) : '—'}</dd>
+            </dl>
+            <div className="row" style={{ marginTop: 12 }}>
+              <button className="btn" onClick={copySummary}>
+                <Copy size={15} /> Copy as Markdown
+              </button>
+              <button className="btn ghost" onClick={() => downloadText(`week-${week}-summary.md`, weekSummaryMarkdown(data, week), 'text/markdown')}>
+                <Download size={15} /> Download .md
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </>

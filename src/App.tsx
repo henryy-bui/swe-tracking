@@ -2,14 +2,17 @@ import { useEffect, useRef, useState } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useStore } from '@/store/useStore';
 import { useTheme, applyTheme } from '@/store/theme';
+import { useUi } from '@/store/ui';
 import { currentWeek, dueProblems, overallProgress, overdueFollowUps, openFollowUps } from '@/lib/derive';
 import { phaseOfWeek, TOTAL_WEEKS } from '@/data/roadmap';
 import { pct } from '@/lib/date';
+import { useShortcuts } from '@/lib/useShortcuts';
 import { ProgressBar, Toast } from '@/components/ui';
 import { SyncIndicator } from '@/components/CloudSync';
 import { FocusTimer } from '@/components/FocusTimer';
+import { CommandPalette, MOD_KEY } from '@/components/CommandPalette';
 import {
-  BookOpen, Braces, Clock, Flag, FolderKanban, LayoutDashboard, ListChecks, Menu, Monitor, Moon, Settings, Sun, X, type IconProps,
+  BookOpen, Braces, Clock, Flag, FolderKanban, LayoutDashboard, ListChecks, Menu, Monitor, Moon, Search, Settings, Sun, Trophy, X, type IconProps,
 } from '@/components/icons';
 
 type IconComponent = (props: IconProps) => JSX.Element;
@@ -31,6 +34,7 @@ const NAV: NavItem[] = [
   { to: '/dsa', label: 'DSA problems', short: 'DSA', icon: Braces },
   { to: '/projects', label: 'Side projects', short: 'Projects', icon: FolderKanban },
   { to: '/resources', label: 'Resources', short: 'Resources', icon: BookOpen },
+  { to: '/milestones', label: 'Milestones', short: 'Milestones', icon: Trophy },
   { to: '/settings', label: 'Settings', short: 'Settings', icon: Settings },
 ];
 
@@ -77,7 +81,9 @@ function PlanSummary() {
 export default function App() {
   const data = useStore();
   const theme = useTheme((s) => s.theme);
+  const openPalette = useUi((s) => s.openPalette);
   useEffect(() => applyTheme(theme), [theme]);
+  useShortcuts();
 
   const location = useLocation();
   const [moreOpen, setMoreOpen] = useState(false);
@@ -154,6 +160,12 @@ export default function App() {
           </div>
           <ThemeToggle />
         </div>
+        <button className="search-btn" onClick={() => openPalette()} aria-label="Search (Cmd K)">
+          <Search size={16} />
+          <span className="grow">Search…</span>
+          <kbd className="kbd">{MOD_KEY}</kbd>
+          <kbd className="kbd">K</kbd>
+        </button>
         <nav className="nav" aria-label="Main">
           {NAV.map((n) => {
             const Icon = n.icon;
@@ -177,6 +189,9 @@ export default function App() {
         <span className="brand-title">SWE Roadmap</span>
         <span className="row" style={{ gap: 4 }}>
           <FocusTimer compact />
+          <button className="btn ghost icon" onClick={() => openPalette()} aria-label="Search">
+            <Search size={18} />
+          </button>
           <ThemeToggle />
         </span>
       </header>
@@ -235,6 +250,7 @@ export default function App() {
         </>
       )}
 
+      <CommandPalette />
       <Toast />
     </div>
   );

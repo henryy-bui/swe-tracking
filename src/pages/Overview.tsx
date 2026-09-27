@@ -3,9 +3,10 @@ import { Link } from 'react-router-dom';
 import { useStore } from '@/store/useStore';
 import { PHASES, PROJECTS, TOTAL_WEEKS, phaseOfWeek, weekDef } from '@/data/roadmap';
 import {
-  activeDays, currentWeek, dueProblems, expectedDone, isOverdue, minutesByCalendarWeek, minutesByDay, minutesThisWeek, openFollowUps, overallProgress,
+  activeDays, currentWeek, dueProblems, expectedDone, forecast, isOverdue, minutesByCalendarWeek, minutesByDay, minutesThisWeek, openFollowUps, overallProgress,
   overdueFollowUps, pace, phaseProgress, planStatus, projectProgress, projectState, sortFollowUps, streak, taskItems, isDone, weekProgress, weekRange, weekStatus,
 } from '@/lib/derive';
+import { achievements, nextUp, unlockedCount } from '@/lib/achievements';
 import { diffDays, fmtDate, fmtHours, pct, plural, relDay, today } from '@/lib/date';
 import { EmptyState, PageHead, ProgressBar, ProgressLine, StatTile, StatusPill, WeekLink } from '@/components/ui';
 import { WeeklyHoursChart } from '@/components/WeeklyHoursChart';
@@ -34,6 +35,9 @@ export default function Overview() {
   const buckets = minutesByCalendarWeek(data, 12);
   const dueSoon = sortFollowUps(open).slice(0, 6);
   const reviewsDue = dueProblems(data).length;
+  const fc = forecast(data);
+  const badges = achievements(data);
+  const badgesNext = nextUp(badges, 3);
 
   const submitStart = (e: FormEvent) => {
     e.preventDefault();
@@ -76,6 +80,16 @@ export default function Overview() {
                     return `Day ${dayNo} of 7 · ${fmtDate(r.start)} – ${fmtDate(r.end)} · ${overall.weeksDone} weeks completed`;
                   })()}
                 </div>
+                {fc && (
+                  <div className="sub small">
+                    At {Math.round(fc.ratePerWeek * 10) / 10} items/week you finish around <strong>{fmtDate(fc.finishDate, { day: 'numeric', month: 'short', year: 'numeric' })}</strong>
+                    {Math.abs(fc.deltaWeeks) < 0.5
+                      ? ', right on plan.'
+                      : fc.deltaWeeks < 0
+                        ? `, ${plural(Math.round(-fc.deltaWeeks), 'week')} early.`
+                        : `, ${plural(Math.round(fc.deltaWeeks), 'week')} late.`}
+                  </div>
+                )}
               </>
             )}
             {status === 'upcoming' && (
@@ -304,6 +318,36 @@ export default function Overview() {
             })}
           </div>
         </div>
+      </div>
+
+      <div className="card" style={{ marginTop: 14 }}>
+        <div className="card-head">
+          <h2>
+            Milestones · {unlockedCount(badges)}/{badges.length}
+          </h2>
+          <Link to="/milestones" className="small">
+            All milestones →
+          </Link>
+        </div>
+        {badgesNext.length === 0 ? (
+          <EmptyState>Tick a task or log a session to start earning milestones.</EmptyState>
+        ) : (
+          <div className="stack">
+            {badgesNext.map((a) => (
+              <ProgressLine
+                key={a.id}
+                title={
+                  <span>
+                    <strong>{a.title}</strong> <span className="faint small">· {a.description}</span>
+                  </span>
+                }
+                done={Math.round(a.progress * 100)}
+                total={100}
+                right={a.detail}
+              />
+            ))}
+          </div>
+        )}
       </div>
 
       {status === 'active' && cw && cw < TOTAL_WEEKS && (

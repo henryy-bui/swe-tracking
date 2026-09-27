@@ -28,7 +28,15 @@ const useElapsed = (startedAt: number | null) => {
   return startedAt ? now - startedAt : 0;
 };
 
-/* Fires the Pomodoro alert once per session. */
+const MESSAGE = `${POMODORO_MINUTES} minutes of focus. Take a break or keep going.`;
+
+/* Ask once for permission to notify when the tab is in the background. */
+export const requestNotifyPermission = () => {
+  if (typeof Notification === 'undefined' || Notification.permission !== 'default') return;
+  void Notification.requestPermission();
+};
+
+/* Fires the Pomodoro alert once per session: beep + toast, plus a system notification when the tab is hidden. */
 const usePomodoroAlert = (elapsed: number) => {
   const { pomodoro, alerted, setAlerted } = useTimer();
   const reached = pomodoro && elapsed >= POMODORO_MINUTES * 60000;
@@ -36,7 +44,14 @@ const usePomodoroAlert = (elapsed: number) => {
     if (reached && !alerted) {
       setAlerted();
       beep();
-      toast(`${POMODORO_MINUTES} minutes of focus. Take a break or keep going.`);
+      toast(MESSAGE);
+      if (typeof document !== 'undefined' && document.hidden && typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+        try {
+          new Notification('Pomodoro done', { body: MESSAGE, icon: '/favicon.svg', tag: 'pomodoro' });
+        } catch {
+          /* notifications unavailable in this context */
+        }
+      }
     }
   }, [reached, alerted, setAlerted]);
   return reached;
@@ -135,7 +150,15 @@ export function FocusTimer({ compact }: Props) {
       <div className="row between">
         <span className="timer-label">{startedAt ? (reached ? 'Pomodoro done' : 'Focusing') : 'Focus timer'}</span>
         <label className="small muted row" style={{ gap: 4 }}>
-          <input type="checkbox" checked={pomodoro} onChange={(e) => setPomodoro(e.target.checked)} style={{ width: 14, height: 14 }} />
+          <input
+            type="checkbox"
+            checked={pomodoro}
+            onChange={(e) => {
+              setPomodoro(e.target.checked);
+              if (e.target.checked) requestNotifyPermission();
+            }}
+            style={{ width: 14, height: 14 }}
+          />
           25m
         </label>
       </div>

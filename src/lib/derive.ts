@@ -116,6 +116,31 @@ export const expectedDone = (data: AppData): number | null => {
   return Math.round(expected);
 };
 
+export interface Forecast {
+  ratePerWeek: number; // items completed per elapsed week
+  remaining: number;
+  weeksNeeded: number;
+  finishDate: string; // projected, YYYY-MM-DD
+  planEnd: string;
+  deltaWeeks: number; // negative = early
+}
+
+/* Projected finish at the observed completion rate. Null before the plan starts or with no progress. */
+export const forecast = (data: AppData): Forecast | null => {
+  if (!data.startDate) return null;
+  const elapsedDays = diffDays(data.startDate, today());
+  if (elapsedDays < 0) return null;
+  const overall = overallProgress(data);
+  if (overall.done === 0) return null;
+  const elapsedWeeks = Math.max(1 / 7, (elapsedDays + 1) / 7);
+  const ratePerWeek = overall.done / elapsedWeeks;
+  const remaining = overall.total - overall.done;
+  const weeksNeeded = remaining / ratePerWeek;
+  const finishDate = addDays(today(), Math.ceil(weeksNeeded * 7));
+  const planEnd = addDays(data.startDate, TOTAL_WEEKS * 7 - 1);
+  return { ratePerWeek, remaining, weeksNeeded, finishDate, planEnd, deltaWeeks: diffDays(planEnd, finishDate) / 7 };
+};
+
 export type Pace = { kind: 'ahead' | 'behind' | 'on-track'; delta: number } | null;
 
 export const pace = (data: AppData): Pace => {

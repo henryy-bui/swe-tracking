@@ -69,6 +69,8 @@ Lora loads from Google Fonts with `Georgia` as fallback, so offline still render
 - **Lists** `.list` rows with `.body`, `.meta`, `.actions`; `.checklist` for checkbox rows.
 - **Empty states** `.empty`: dashed border, one sentence that says what to do.
 - **Toast** `.toast`: dark pill at the bottom, 2.4 s, for confirmations only.
+- **Command palette** `.palette`: centered dialog at 12vh on desktop, full-screen on phones; grouped results with the selected row in accent-soft; footer lists shortcuts. Keyboard hints use `.kbd` (hairline, 2px bottom border, 11px).
+- **Milestones** `.milestone`: card with a round icon well; unlocked cards use the good-soft fill and a filled good icon, locked ones show a thin progress bar and the `current / target` detail.
 
 ## Icons
 

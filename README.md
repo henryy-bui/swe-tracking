@@ -25,7 +25,11 @@ pnpm preview    # serve the production build
 - **DSA problems**: track problems with difficulty, topic, and week. Solved problems come back for review on a spaced schedule (1, 3, 7, 14, 30 days); due reviews show in the sidebar badge and on the Overview.
 - **Side projects**: the four portfolio projects with status, repo link, milestones (from the roadmap plus your own), and notes.
 - **Resources**: Boot.dev courses and the four books with status, progress, and notes.
-- **Settings**: plan start date, weekly hour target, cloud sync, JSON export/import, reset.
+- **Milestones**: achievements earned from your data (streaks, hours, phases, DSA, projects, habits) with a "next up" card on the Overview.
+- **Search and shortcuts**: `⌘K` / `Ctrl+K` or `/` opens a palette that searches weeks, tasks, notes, follow-ups, problems, projects, and resources, plus quick actions (timer, theme, current week, backup). `g` then `o/w/l/f/d/p/r/m/s` jumps to a page; `t` starts or stops the timer.
+- **Reports**: each week page has "Copy as Markdown" for a week summary; Settings exports a whole-plan progress report as Markdown.
+- **Pace forecast**: the Overview projects your finish date from the completion rate so far.
+- **Settings**: plan start date, weekly hour target, cloud sync, JSON export/import, progress report, reset.
 - **Theme**: the button beside the app name cycles auto / light / dark (per device, not synced).
 
 ## Data and multi-device sync
