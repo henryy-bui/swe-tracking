@@ -5,6 +5,7 @@ import { TOTAL_WEEKS, phaseOfWeek, projectById, weekDef } from '@/data/roadmap';
 import { currentWeek, isDone, isOverdue, minutesForRoadmapWeek, sortFollowUps, taskItems, weekProgress, weekRange, weekStatus } from '@/lib/derive';
 import { fmtDate, fmtHours, relDay, today } from '@/lib/date';
 import { EmptyState, PageHead, ProgressBar, StatusPill, toast } from '@/components/ui';
+import { AlertTriangle, ChevronLeft, ChevronRight, Star, X } from '@/components/icons';
 
 export default function WeekDetail() {
   const { n } = useParams();
@@ -99,20 +100,20 @@ function WeekBody({ week }: { week: number }) {
           </Link>
           {week > 1 ? (
             <Link to={`/weeks/${week - 1}`} className="btn">
-              ← Week {week - 1}
+              <ChevronLeft size={16} /> Week {week - 1}
             </Link>
           ) : (
             <button className="btn" disabled>
-              ← Week 0
+              <ChevronLeft size={16} /> Week 0
             </button>
           )}
           {week < TOTAL_WEEKS ? (
             <Link to={`/weeks/${week + 1}`} className="btn">
-              Week {week + 1} →
+              Week {week + 1} <ChevronRight size={16} />
             </Link>
           ) : (
             <button className="btn" disabled>
-              Week 37 →
+              Week 37 <ChevronRight size={16} />
             </button>
           )}
         </div>
@@ -157,8 +158,8 @@ function WeekBody({ week }: { week: number }) {
                     </label>
                     {done && mark?.at && <span className="meta">{fmtDate(mark.at)}</span>}
                     {it.kind === 'custom' && it.customId && (
-                      <button className="btn sm ghost" onClick={() => deleteCustomTask(week, it.customId!)} aria-label={`Delete task "${it.label}"`}>
-                        ✕
+                      <button className="btn sm ghost icon" onClick={() => deleteCustomTask(week, it.customId!)} aria-label={`Delete task "${it.label}"`}>
+                        <X size={14} />
                       </button>
                     )}
                   </li>
@@ -223,7 +224,7 @@ function WeekBody({ week }: { week: number }) {
                     onClick={() => setRetro(week, { rating: retro?.rating === n ? 0 : n })}
                     aria-label={`${n} of 5`}
                   >
-                    ★
+                    <Star size={22} filled={(retro?.rating ?? 0) >= n} />
                   </button>
                 ))}
                 <span className="small muted" style={{ marginLeft: 6 }}>
@@ -337,13 +338,24 @@ function WeekBody({ week }: { week: number }) {
                     <div className="body">
                       <div className="title">{f.title}</div>
                       <div className="meta">
-                        {f.due && <span className={isOverdue(f) ? 'pill overdue' : ''}>{isOverdue(f) ? '⚠ overdue · ' : 'due '}{relDay(f.due)}</span>}
+                        {f.due && (
+                          <span className={isOverdue(f) ? 'pill overdue' : ''}>
+                            {isOverdue(f) ? (
+                              <>
+                                <AlertTriangle size={12} /> overdue ·{' '}
+                              </>
+                            ) : (
+                              'due '
+                            )}
+                            {relDay(f.due)}
+                          </span>
+                        )}
                         <span>{f.priority}</span>
                       </div>
                     </div>
                     <div className="actions">
-                      <button className="btn sm ghost" onClick={() => deleteFollowUp(f.id)} aria-label={`Delete "${f.title}"`}>
-                        ✕
+                      <button className="btn sm ghost icon" onClick={() => deleteFollowUp(f.id)} aria-label={`Delete "${f.title}"`}>
+                        <X size={14} />
                       </button>
                     </div>
                   </li>

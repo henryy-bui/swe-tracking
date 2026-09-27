@@ -4,6 +4,7 @@ import { PROJECTS, type ProjectDef } from '@/data/roadmap';
 import { projectProgress, projectState, weekRange } from '@/lib/derive';
 import { fmtDate } from '@/lib/date';
 import { PageHead, ProgressBar, WeekLink, toast } from '@/components/ui';
+import { X } from '@/components/icons';
 
 const STATUS_LABEL: Record<ProjectStatus, string> = { 'not-started': 'Not started', 'in-progress': 'In progress', done: 'Done' };
 
@@ -108,8 +109,8 @@ function ProjectCard({ def }: { def: ProjectDef }) {
               <span>{m.title}</span>
             </label>
             {m.custom && (
-              <button className="btn sm ghost" onClick={() => deleteMilestone(def.id, m.id)} aria-label={`Delete milestone "${m.title}"`}>
-                ✕
+              <button className="btn sm ghost icon" onClick={() => deleteMilestone(def.id, m.id)} aria-label={`Delete milestone "${m.title}"`}>
+                <X size={14} />
               </button>
             )}
           </li>

@@ -5,6 +5,7 @@ import { minutesByCalendarWeek, minutesThisWeek, totalMinutes, weekForDate } fro
 import { fmtDate, fmtDateLong, fmtHours, pct, plural, today, weekStart } from '@/lib/date';
 import { EmptyState, PageHead, StatTile, WeekLink, toast } from '@/components/ui';
 import { WeeklyHoursChart } from '@/components/WeeklyHoursChart';
+import { X } from '@/components/icons';
 
 export default function StudyLog() {
   const data = useStore();
@@ -158,8 +159,8 @@ export default function StudyLog() {
                       {l.note && <div className="note">{l.note}</div>}
                     </div>
                     <div className="actions">
-                      <button className="btn sm ghost" onClick={() => deleteLog(l.id)} aria-label={`Delete session on ${fmtDate(l.date)}`}>
-                        ✕
+                      <button className="btn sm ghost icon" onClick={() => deleteLog(l.id)} aria-label={`Delete session on ${fmtDate(l.date)}`}>
+                        <X size={14} />
                       </button>
                     </div>
                   </li>

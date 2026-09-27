@@ -3,6 +3,7 @@ import { useEffect, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { pct } from '@/lib/date';
 import type { WeekStatus } from '@/lib/derive';
+import { Check, Circle, CircleDot, Minus } from '@/components/icons';
 
 /* ---------- Toast ---------- */
 interface ToastState {
@@ -98,17 +99,18 @@ const STATUS_LABEL: Record<WeekStatus, string> = {
   'not-started': 'Not started',
   skipped: 'Skipped',
 };
-const STATUS_GLYPH: Record<WeekStatus, string> = {
-  done: '✓',
-  'in-progress': '◐',
-  'not-started': '○',
-  skipped: '–',
-};
+const STATUS_ICON = {
+  done: Check,
+  'in-progress': CircleDot,
+  'not-started': Circle,
+  skipped: Minus,
+} as const;
 
 export function StatusPill({ status }: { status: WeekStatus }) {
+  const Icon = STATUS_ICON[status];
   return (
     <span className={`pill ${status}`}>
-      <span aria-hidden="true">{STATUS_GLYPH[status]}</span> {STATUS_LABEL[status]}
+      <Icon size={13} /> {STATUS_LABEL[status]}
     </span>
   );
 }

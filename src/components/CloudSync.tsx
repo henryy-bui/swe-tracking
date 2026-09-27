@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react';
 import { isCloudConfigured } from '@/lib/supabase';
 import { signInWithMagicLink, signInWithPassword, signOut, signUpWithPassword, syncNow, useSync, type SyncStatus } from '@/store/sync';
 import { toast } from '@/components/ui';
+import { AlertTriangle, Cloud, CloudOff, RefreshCw } from '@/components/icons';
 
 export const SYNC_LABEL: Record<SyncStatus, string> = {
   disabled: 'Local only',
@@ -12,22 +13,23 @@ export const SYNC_LABEL: Record<SyncStatus, string> = {
   error: 'Sync error',
 };
 
-const SYNC_GLYPH: Record<SyncStatus, string> = {
-  disabled: '○',
-  'signed-out': '○',
-  syncing: '◐',
-  synced: '●',
-  offline: '◌',
-  error: '⚠',
-};
+const SYNC_ICON = {
+  disabled: CloudOff,
+  'signed-out': CloudOff,
+  syncing: RefreshCw,
+  synced: Cloud,
+  offline: CloudOff,
+  error: AlertTriangle,
+} as const;
 
 /* Compact indicator for the sidebar. */
 export function SyncIndicator() {
   const { status, pending } = useSync();
   const cls = status === 'synced' ? 'good' : status === 'error' ? 'critical' : status === 'syncing' || pending ? 'accent' : '';
+  const Icon = pending && status !== 'syncing' ? RefreshCw : SYNC_ICON[status];
   return (
     <span className={`pill ${cls}`} title={SYNC_LABEL[status]}>
-      <span aria-hidden="true">{SYNC_GLYPH[status]}</span> {pending && status !== 'syncing' ? 'Pending…' : SYNC_LABEL[status]}
+      <Icon size={13} /> {pending && status !== 'syncing' ? 'Pending…' : SYNC_LABEL[status]}
     </span>
   );
 }

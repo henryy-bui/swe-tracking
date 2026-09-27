@@ -4,6 +4,7 @@ import { LOG_TAGS, useStore, type LogTag } from '@/store/useStore';
 import { currentWeek } from '@/lib/derive';
 import { fmtHours, today } from '@/lib/date';
 import { toast } from '@/components/ui';
+import { Play, Square } from '@/components/icons';
 
 const fmtClock = (ms: number) => {
   const s = Math.max(0, Math.floor(ms / 1000));
@@ -102,11 +103,11 @@ export function FocusTimer() {
       </div>
       {startedAt ? (
         <button className="btn sm" onClick={onStop}>
-          Stop &amp; log
+          <Square size={13} filled /> Stop &amp; log
         </button>
       ) : (
         <button className="btn primary sm" onClick={start}>
-          Start
+          <Play size={13} filled /> Start
         </button>
       )}
     </div>

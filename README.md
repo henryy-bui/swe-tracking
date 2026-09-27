@@ -48,6 +48,10 @@ How sync behaves:
 
 When the env vars are absent, the Cloud sync card explains the setup and everything stays local.
 
+## Design
+
+Colors, type, spacing, component rules, and the icon set are documented in `DESIGN.md`. Use its tokens and classes when adding UI.
+
 ## Stack
 
 Vite, React 18, TypeScript, react-router (hash routing, so it works from any static host), zustand with the persist middleware. No UI library; one stylesheet with light and dark themes. Roadmap content lives in `src/data/roadmap.ts`.

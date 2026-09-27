@@ -8,20 +8,23 @@ import { pct } from '@/lib/date';
 import { ProgressBar, Toast } from '@/components/ui';
 import { SyncIndicator } from '@/components/CloudSync';
 import { FocusTimer } from '@/components/FocusTimer';
+import { BookOpen, Braces, Clock, Flag, FolderKanban, LayoutDashboard, ListChecks, Monitor, Moon, Settings, Sun, type IconProps } from '@/components/icons';
 
-const NAV = [
-  { to: '/', label: 'Overview', end: true },
-  { to: '/weeks', label: 'Weekly checklist' },
-  { to: '/log', label: 'Study log' },
-  { to: '/followups', label: 'Follow-ups' },
-  { to: '/dsa', label: 'DSA problems' },
-  { to: '/projects', label: 'Side projects' },
-  { to: '/resources', label: 'Resources' },
-  { to: '/settings', label: 'Settings' },
+type IconComponent = (props: IconProps) => JSX.Element;
+
+const NAV: { to: string; label: string; icon: IconComponent; end?: boolean }[] = [
+  { to: '/', label: 'Overview', icon: LayoutDashboard, end: true },
+  { to: '/weeks', label: 'Weekly checklist', icon: ListChecks },
+  { to: '/log', label: 'Study log', icon: Clock },
+  { to: '/followups', label: 'Follow-ups', icon: Flag },
+  { to: '/dsa', label: 'DSA problems', icon: Braces },
+  { to: '/projects', label: 'Side projects', icon: FolderKanban },
+  { to: '/resources', label: 'Resources', icon: BookOpen },
+  { to: '/settings', label: 'Settings', icon: Settings },
 ];
 
 const THEME_LABEL = { system: 'Auto', light: 'Light', dark: 'Dark' } as const;
-const THEME_GLYPH = { system: '◐', light: '☀', dark: '☾' } as const;
+const THEME_ICON = { system: Monitor, light: Sun, dark: Moon } as const;
 
 export default function App() {
   const data = useStore();
@@ -33,6 +36,7 @@ export default function App() {
   const reviews = dueProblems(data).length;
   const cw = currentWeek(data);
   const overall = overallProgress(data);
+  const ThemeIcon = THEME_ICON[theme];
 
   const badgeFor = (to: string) => {
     if (to === '/followups' && (overdue > 0 || open > 0)) {
@@ -61,16 +65,20 @@ export default function App() {
             <div className="small">Frontend → Go, Systems & AI</div>
           </div>
           <button className="btn ghost icon" onClick={cycle} title={`Theme: ${THEME_LABEL[theme]}`} aria-label={`Theme: ${THEME_LABEL[theme]}. Click to change.`}>
-            {THEME_GLYPH[theme]}
+            <ThemeIcon size={18} />
           </button>
         </div>
         <nav className="nav" aria-label="Main">
-          {NAV.map((n) => (
-            <NavLink key={n.to} to={n.to} end={n.end} className={({ isActive }) => (isActive ? 'active' : '')}>
-              <span>{n.label}</span>
-              {badgeFor(n.to)}
-            </NavLink>
-          ))}
+          {NAV.map((n) => {
+            const Icon = n.icon;
+            return (
+              <NavLink key={n.to} to={n.to} end={n.end} className={({ isActive }) => (isActive ? 'active' : '')}>
+                <Icon size={18} />
+                <span>{n.label}</span>
+                {badgeFor(n.to)}
+              </NavLink>
+            );
+          })}
         </nav>
         <FocusTimer />
         <div className="sidebar-foot">

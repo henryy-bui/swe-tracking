@@ -5,6 +5,7 @@ import { PHASES, WEEKS, projectById } from '@/data/roadmap';
 import { currentWeek, phaseProgress, weekProgress, weekRange, weekStatus } from '@/lib/derive';
 import { fmtDate, pct } from '@/lib/date';
 import { PageHead, ProgressBar, StatusPill, Tabs } from '@/components/ui';
+import { Star } from '@/components/icons';
 
 type Filter = 'all' | '1' | '2' | '3' | '4';
 
@@ -79,8 +80,10 @@ export default function Weeks() {
                     <div className="right">
                       <span className="row" style={{ gap: 6 }}>
                         {rating > 0 && (
-                          <span className="stars" aria-label={`Rated ${rating} of 5`}>
-                            {'★'.repeat(rating)}
+                          <span className="stars" role="img" aria-label={`Rated ${rating} of 5`}>
+                            {Array.from({ length: rating }, (_, i) => (
+                              <Star key={i} size={12} filled />
+                            ))}
                           </span>
                         )}
                         <StatusPill status={st} />

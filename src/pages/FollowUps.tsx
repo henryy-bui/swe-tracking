@@ -4,6 +4,7 @@ import { TOTAL_WEEKS, weekDef } from '@/data/roadmap';
 import { isOverdue, sortFollowUps, weekForDate } from '@/lib/derive';
 import { fmtDate, relDay, today } from '@/lib/date';
 import { EmptyState, PageHead, Tabs, WeekLink, toast } from '@/components/ui';
+import { AlertTriangle, X } from '@/components/icons';
 
 type Filter = 'open' | 'overdue' | 'done' | 'all';
 
@@ -121,7 +122,15 @@ export default function FollowUps() {
                     <div className="meta">
                       {f.due && (
                         <span className={overdue ? 'pill overdue' : ''} title={fmtDate(f.due, { day: 'numeric', month: 'long', year: 'numeric' })}>
-                          {overdue ? '⚠ overdue · ' : f.done ? 'was due ' : 'due '}
+                          {overdue ? (
+                            <>
+                              <AlertTriangle size={12} /> overdue ·{' '}
+                            </>
+                          ) : f.done ? (
+                            'was due '
+                          ) : (
+                            'due '
+                          )}
                           {relDay(f.due)}
                         </span>
                       )}
@@ -165,8 +174,8 @@ export default function FollowUps() {
                     >
                       Edit
                     </button>
-                    <button className="btn sm ghost" onClick={() => deleteFollowUp(f.id)} aria-label={`Delete "${f.title}"`}>
-                      ✕
+                    <button className="btn sm ghost icon" onClick={() => deleteFollowUp(f.id)} aria-label={`Delete "${f.title}"`}>
+                      <X size={14} />
                     </button>
                   </div>
                 </li>

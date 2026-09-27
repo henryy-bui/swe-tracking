@@ -11,6 +11,7 @@ import { EmptyState, PageHead, ProgressBar, ProgressLine, StatTile, StatusPill, 
 import { WeeklyHoursChart } from '@/components/WeeklyHoursChart';
 import { ActivityHeatmap } from '@/components/ActivityHeatmap';
 import { toast } from '@/components/ui';
+import { AlertTriangle, RefreshCw, Target, TrendingDown, TrendingUp } from '@/components/icons';
 
 const PROJECT_STATUS_LABEL = { 'not-started': 'Not started', 'in-progress': 'In progress', done: 'Done' } as const;
 
@@ -103,9 +104,7 @@ export default function Overview() {
           </div>
           {p && (
             <div className={`pace ${p.kind}`} title={`Expected about ${expected} items done by today at a linear pace.`}>
-              <span className="glyph" aria-hidden="true">
-                {p.kind === 'ahead' ? '▲' : p.kind === 'behind' ? '▼' : '●'}
-              </span>
+              {p.kind === 'ahead' ? <TrendingUp size={16} /> : p.kind === 'behind' ? <TrendingDown size={16} /> : <Target size={16} />}
               {p.kind === 'on-track' && 'On track'}
               {p.kind === 'ahead' && `Ahead by ${plural(p.delta, 'item')}`}
               {p.kind === 'behind' && `Behind by ${plural(-p.delta, 'item')}`}
@@ -125,7 +124,15 @@ export default function Overview() {
         <StatTile
           label="Follow-ups"
           value={open.length}
-          sub={overdue.length > 0 ? <span className="pill overdue">⚠ {plural(overdue.length, 'overdue')}</span> : 'Nothing overdue'}
+          sub={
+            overdue.length > 0 ? (
+              <span className="pill overdue">
+                <AlertTriangle size={12} /> {plural(overdue.length, 'overdue')}
+              </span>
+            ) : (
+              'Nothing overdue'
+            )
+          }
         />
       </div>
 
@@ -204,7 +211,9 @@ export default function Overview() {
           </div>
           {reviewsDue > 0 && (
             <div className="row" style={{ marginBottom: 10 }}>
-              <span className="pill accent">⟳ {plural(reviewsDue, 'DSA problem')} due for review</span>
+              <span className="pill accent">
+                <RefreshCw size={12} /> {plural(reviewsDue, 'DSA problem')} due for review
+              </span>
               <Link to="/dsa" className="small">
                 Review →
               </Link>
@@ -221,7 +230,13 @@ export default function Overview() {
                     <div className="meta">
                       {f.due && (
                         <span className={isOverdue(f) ? 'pill overdue' : ''}>
-                          {isOverdue(f) ? '⚠ overdue · ' : 'due '}
+                          {isOverdue(f) ? (
+                            <>
+                              <AlertTriangle size={12} /> overdue ·{' '}
+                            </>
+                          ) : (
+                            'due '
+                          )}
                           {relDay(f.due)}
                         </span>
                       )}

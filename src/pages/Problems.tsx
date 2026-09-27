@@ -4,6 +4,7 @@ import { TOTAL_WEEKS, weekDef } from '@/data/roadmap';
 import { currentWeek, isReviewDue, problemStats } from '@/lib/derive';
 import { fmtDate, relDay, today } from '@/lib/date';
 import { EmptyState, PageHead, StatTile, Tabs, WeekLink, toast } from '@/components/ui';
+import { RefreshCw, X } from '@/components/icons';
 
 type Filter = 'due' | 'todo' | 'solved' | 'all';
 
@@ -218,7 +219,11 @@ function ProblemRow({ p, editing, editNote, onEditNote, onStartEdit, onSaveEdit,
             p.title
           )}{' '}
           <span className={DIFF_CLASS[p.difficulty]}>{p.difficulty}</span>
-          {due && <span className="pill overdue">⟳ review due</span>}
+          {due && (
+            <span className="pill overdue">
+              <RefreshCw size={12} /> review due
+            </span>
+          )}
         </div>
         <div className="meta">
           {p.topic && <span>{p.topic}</span>}
@@ -260,8 +265,8 @@ function ProblemRow({ p, editing, editNote, onEditNote, onStartEdit, onSaveEdit,
         <button className="btn sm ghost" onClick={onStartEdit} aria-label={`Edit notes for ${p.title}`}>
           Notes
         </button>
-        <button className="btn sm ghost" onClick={onDelete} aria-label={`Delete ${p.title}`}>
-          ✕
+        <button className="btn sm ghost icon" onClick={onDelete} aria-label={`Delete ${p.title}`}>
+          <X size={14} />
         </button>
       </div>
     </li>

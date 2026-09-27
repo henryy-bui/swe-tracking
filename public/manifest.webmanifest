@@ -1,0 +1,10 @@
+{
+  "name": "SWE Roadmap Tracker",
+  "short_name": "Roadmap",
+  "description": "36-week plan tracker: checklist, study log, follow-ups, DSA reviews, side projects.",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#F4F3EE",
+  "theme_color": "#D97757",
+  "icons": [{ "src": "favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}
