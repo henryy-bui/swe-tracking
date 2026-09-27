@@ -17,12 +17,15 @@ const level = (minutes: number, active: boolean): number => {
 };
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const GAP = 3;
 
 /* GitHub-style calendar. Columns are weeks (Mon-Sun), rows are weekdays.
-   The number of weeks shrinks with the container so it never needs horizontal scrolling. */
+   Cell size and week count are computed from the measured container width in pixels,
+   so the grid never overflows and never depends on aspect-ratio support. */
 export function ActivityHeatmap({ minutesByDay, activeDays, maxWeeks = 26 }: Props) {
   const [ref, width] = useContainerWidth<HTMLDivElement>();
   const weeks = Math.min(maxWeeks, width >= 640 ? 26 : width >= 480 ? 20 : 14);
+  const cell = Math.max(8, Math.min(16, Math.floor((width - GAP * (weeks - 1)) / weeks)));
 
   const end = today();
   const firstMonday = addDays(weekStart(end), -7 * (weeks - 1));
@@ -33,33 +36,37 @@ export function ActivityHeatmap({ minutesByDay, activeDays, maxWeeks = 26 }: Pro
     columns.push(col);
   }
 
-  // Month label whenever a column starts a new month.
+  // Month label when a column starts a new month, skipped if the previous label is too close to fit.
+  let lastLabelAt = -10;
   const labels = columns.map((col, i) => {
     const m = Number(col[0].slice(5, 7)) - 1;
     const prev = i > 0 ? Number(columns[i - 1][0].slice(5, 7)) - 1 : -1;
-    return m !== prev ? MONTHS[m] : '';
+    if (m === prev || i - lastLabelAt < Math.ceil(30 / (cell + GAP))) return '';
+    lastLabelAt = i;
+    return MONTHS[m];
   });
 
   const totalMinutes = [...minutesByDay.entries()].filter(([d]) => d >= firstMonday && d <= end).reduce((s, [, m]) => s + m, 0);
   const activeCount = [...activeDays].filter((d) => d >= firstMonday && d <= end).length;
+  const columnsStyle = { gridTemplateColumns: `repeat(${weeks}, ${cell}px)`, gap: GAP };
 
   return (
     <div className="heatmap-wrap" ref={ref}>
       <div className="heatmap" role="img" aria-label={`Activity over the last ${weeks} weeks: ${activeCount} active days, ${fmtHours(totalMinutes)} logged.`}>
-        <div className="heatmap-months" style={{ gridTemplateColumns: `repeat(${weeks}, 1fr)` }}>
+        <div className="heatmap-months" style={columnsStyle}>
           {labels.map((l, i) => (
             <span key={i}>{l}</span>
           ))}
         </div>
-        <div className="heatmap-grid" style={{ gridTemplateColumns: `repeat(${weeks}, 1fr)` }}>
+        <div className="heatmap-grid" style={columnsStyle}>
           {columns.map((col) => (
-            <div key={col[0]} className="heatmap-col">
+            <div key={col[0]} className="heatmap-col" style={{ gridTemplateRows: `repeat(7, ${cell}px)`, gap: GAP }}>
               {col.map((day) => {
                 const future = day > end;
                 const minutes = minutesByDay.get(day) ?? 0;
                 const lv = future ? -1 : level(minutes, activeDays.has(day));
                 const title = future ? '' : `${fmtDate(day, { weekday: 'short', day: 'numeric', month: 'short' })}: ${minutes ? fmtHours(minutes) : activeDays.has(day) ? 'active' : 'no activity'}`;
-                return <span key={day} className={`cell${future ? ' future' : ''} l${Math.max(lv, 0)}`} title={title} />;
+                return <span key={day} className={`cell${future ? ' future' : ''} l${Math.max(lv, 0)}`} style={{ width: cell, height: cell }} title={title} />;
               })}
             </div>
           ))}

@@ -98,6 +98,25 @@ export default function App() {
     };
   }, [moreOpen]);
 
+  // Mark the body while a text field has focus so the phone tab bar can get out of the keyboard's way.
+  useEffect(() => {
+    const isTextField = (t: EventTarget | null) => {
+      if (!(t instanceof HTMLElement)) return false;
+      if (t.tagName === 'TEXTAREA' || t.tagName === 'SELECT') return true;
+      if (t.tagName !== 'INPUT') return false;
+      const type = (t as HTMLInputElement).type;
+      return !['checkbox', 'radio', 'range', 'button', 'submit', 'file'].includes(type);
+    };
+    const onFocusIn = (e: FocusEvent) => isTextField(e.target) && document.body.classList.add('typing');
+    const onFocusOut = () => document.body.classList.remove('typing');
+    document.addEventListener('focusin', onFocusIn);
+    document.addEventListener('focusout', onFocusOut);
+    return () => {
+      document.removeEventListener('focusin', onFocusIn);
+      document.removeEventListener('focusout', onFocusOut);
+    };
+  }, []);
+
   const overdue = overdueFollowUps(data).length;
   const open = openFollowUps(data).length;
   const reviews = dueProblems(data).length;

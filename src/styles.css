@@ -125,7 +125,11 @@
 html,
 body,
 #root {
-  height: 100%;
+  min-height: 100%;
+}
+html {
+  background: var(--bg);
+  -webkit-text-size-adjust: 100%;
 }
 body {
   margin: 0;
@@ -218,7 +222,8 @@ textarea {
 .app {
   display: grid;
   grid-template-columns: var(--sidebar-w) 1fr;
-  min-height: 100%;
+  min-height: 100vh;
+  min-height: 100dvh;
 }
 .sidebar {
   position: sticky;
@@ -341,6 +346,8 @@ textarea {
     gap: 8px;
     padding: 10px 16px;
     padding-top: calc(10px + env(safe-area-inset-top));
+    padding-left: max(16px, env(safe-area-inset-left));
+    padding-right: max(16px, env(safe-area-inset-right));
     background: var(--bg);
     border-bottom: 1px solid var(--border);
   }
@@ -348,9 +355,20 @@ textarea {
     font-family: var(--font-serif);
     font-size: 18px;
     font-weight: 500;
+    white-space: nowrap;
   }
   .main {
-    padding: 18px 16px calc(88px + env(safe-area-inset-bottom));
+    padding: 18px 16px calc(96px + env(safe-area-inset-bottom));
+    padding-left: max(16px, env(safe-area-inset-left));
+    padding-right: max(16px, env(safe-area-inset-right));
+    overflow-x: clip;
+  }
+  /* While typing, the keyboard owns the bottom of the screen; the fixed tab bar would float over the field. */
+  body.typing .tabbar {
+    display: none;
+  }
+  body.typing .main {
+    padding-bottom: 24px;
   }
   h1 {
     font-size: 24px;
@@ -367,6 +385,8 @@ textarea {
     background: var(--surface);
     border-top: 1px solid var(--border);
     padding: 6px 4px calc(6px + env(safe-area-inset-bottom));
+    padding-left: max(4px, env(safe-area-inset-left));
+    padding-right: max(4px, env(safe-area-inset-right));
   }
   .tabbar a,
   .tabbar button {
@@ -1374,8 +1394,9 @@ input[type='checkbox']:focus {
 }
 .heatmap-months {
   display: grid;
-  gap: 3px;
   font-size: 11px;
+  line-height: 14px;
+  height: 14px;
   color: var(--muted);
   margin-bottom: 4px;
 }
@@ -1385,18 +1406,13 @@ input[type='checkbox']:focus {
 }
 .heatmap-grid {
   display: grid;
-  gap: 3px;
 }
 .heatmap-col {
   display: grid;
-  grid-template-rows: repeat(7, 1fr);
-  gap: 3px;
 }
 .heatmap .cell,
 .heatmap-legend .cell {
   display: block;
-  aspect-ratio: 1;
-  width: 100%;
   border-radius: 3px;
   background: var(--surface-3);
 }
