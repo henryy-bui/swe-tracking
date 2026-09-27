@@ -22,6 +22,8 @@ const SYNC_ICON = {
   error: AlertTriangle,
 } as const;
 
+const fmtKB = (bytes: number) => (bytes < 1024 ? `${bytes} B` : `${(bytes / 1024).toFixed(1)} KB`);
+
 /* Compact indicator for the sidebar. */
 export function SyncIndicator() {
   const { status, pending } = useSync();
@@ -36,7 +38,7 @@ export function SyncIndicator() {
 
 /* Full card for the Settings page. */
 export function CloudSyncCard() {
-  const { status, user, lastSyncedAt, error, pending } = useSync();
+  const { status, user, lastSyncedAt, error, pending, live, stats } = useSync();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [mode, setMode] = useState<'sign-in' | 'sign-up'>('sign-in');
@@ -143,6 +145,16 @@ export function CloudSyncCard() {
         <dd>{lastSyncedAt ? new Date(lastSyncedAt).toLocaleString() : '—'}</dd>
         <dt>Local changes</dt>
         <dd>{pending ? 'waiting to upload' : 'all uploaded'}</dd>
+        <dt>Live updates</dt>
+        <dd>{live ? 'connected' : 'reconnecting…'}</dd>
+        <dt>Requests this session</dt>
+        <dd className="tabular">
+          {stats.pulls} pulls ({stats.pullsWithData} with data) · {stats.pushes} pushes · {stats.realtimeApplied} live
+          <span className="faint">
+            {' '}
+            · skipped {stats.skippedPulls + stats.skippedPushes} · {fmtKB(stats.bytesUp)} up / {fmtKB(stats.bytesDown)} down
+          </span>
+        </dd>
       </dl>
       {error && (
         <p className="error" style={{ marginTop: 8 }}>
@@ -150,7 +162,8 @@ export function CloudSyncCard() {
         </p>
       )}
       <p className="hint" style={{ marginTop: 10 }}>
-        The newest change wins when two devices edit while offline. Changes made here appear on other signed-in devices within a second or two.
+        The newest change wins when two devices edit while offline. Changes made here appear on other signed-in devices within a second or two. Pulls only
+        transfer data when the cloud copy is newer; unchanged content is never re-uploaded.
       </p>
       <div className="row" style={{ marginTop: 12 }}>
         <button className="btn" onClick={() => void syncNow()} disabled={status === 'syncing'}>

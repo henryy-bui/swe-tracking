@@ -46,6 +46,8 @@ How sync behaves:
 - Conflicts are last-write-wins by change time, which is fine for one person editing from several devices but will drop the older of two simultaneous offline edits.
 - Signing out keeps the local copy on that device. Resetting data while signed in resets the cloud copy too.
 
+Request budget: pulls are conditional (the server returns the document only when its copy is newer), focus and reconnect pulls are throttled to once per five minutes while realtime is connected, and pushes are de-duplicated by a content hash so unchanged data is never re-uploaded. Rapid edits coalesce into one upload after 1.5 s of quiet. Settings → Cloud sync shows the counts for the current session.
+
 When the env vars are absent, the Cloud sync card explains the setup and everything stays local.
 
 ## On a phone

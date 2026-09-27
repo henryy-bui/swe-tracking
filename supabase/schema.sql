@@ -18,3 +18,8 @@ create policy "users manage their own row"
 
 -- Live updates across devices.
 alter publication supabase_realtime add table public.tracker_state;
+
+-- Query shape used by the app (one row, primary-key lookup, conditional on freshness):
+--   select data, updated_at from tracker_state where user_id = auth.uid() and updated_at > $since
+-- The primary key index covers it; no further index is needed. When the row is not newer the
+-- response is empty, so an in-sync check costs a few hundred bytes.
