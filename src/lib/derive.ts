@@ -1,9 +1,12 @@
 /* Read-only computations over roadmap + persisted data. */
-import { PHASES, PROJECTS, TOTAL_WEEKS, phaseById, projectById, weekDef, type ProjectId } from '@/data/roadmap';
+import { TOTAL_WEEKS, phaseById, projectById, weekDef, type ProjectId } from '@/data/roadmap';
 import type { AppData, FollowUp, Problem, ProjectMark, ProjectMilestone, ResourceMark } from '@/store/useStore';
-import { addDays, clamp, diffDays, today, weekStart } from '@/lib/date';
+import { addDays, diffDays, today, weekStart } from '@/lib/date';
+import { clamp } from '@/lib/format';
+import { customKey, dsaKey, milestoneKey, taskKey } from '@/lib/keys';
+import type { Status } from '@/lib/labels';
 
-export type WeekStatus = 'done' | 'in-progress' | 'not-started' | 'skipped';
+export type WeekStatus = Status;
 
 export interface TaskItem {
   key: string;
@@ -12,16 +15,12 @@ export interface TaskItem {
   customId?: string;
 }
 
-export const taskKey = (week: number, i: number) => `w${week}-${i}`;
-export const dsaKey = (week: number) => `w${week}-dsa`;
-export const customKey = (week: number, id: string) => `w${week}-c${id}`;
-
 /* All checkable items of a week, in display order: roadmap tasks, DSA, then the user's own tasks. */
 export const taskItems = (data: AppData, week: number): TaskItem[] => {
   const w = weekDef(week);
   const items: TaskItem[] = w.tasks.map((label, i) => ({ key: taskKey(week, i), label, kind: 'task' }));
   items.push({ key: dsaKey(week), label: w.dsa, kind: 'dsa' });
-  for (const c of data.customTasks?.[String(week)] ?? []) items.push({ key: customKey(week, c.id), label: c.title, kind: 'custom', customId: c.id });
+  for (const c of data.customTasks[String(week)] ?? []) items.push({ key: customKey(week, c.id), label: c.title, kind: 'custom', customId: c.id });
   return items;
 };
 
@@ -189,7 +188,7 @@ export const activeDays = (data: AppData): Set<string> => {
   data.logs.forEach((l) => set.add(l.date));
   Object.values(data.tasks).forEach((t) => t.done && t.at && set.add(t.at));
   data.followUps.forEach((f) => f.doneAt && set.add(f.doneAt));
-  (data.problems ?? []).forEach((p) => p.solvedAt && set.add(p.solvedAt));
+  data.problems.forEach((p) => p.solvedAt && set.add(p.solvedAt));
   return set;
 };
 
@@ -204,10 +203,10 @@ export const minutesByDay = (data: AppData): Map<string, number> => {
 
 export const isReviewDue = (p: Problem): boolean => p.status === 'solved' && !!p.nextReview && p.nextReview <= today();
 
-export const dueProblems = (data: AppData): Problem[] => (data.problems ?? []).filter(isReviewDue);
+export const dueProblems = (data: AppData): Problem[] => data.problems.filter(isReviewDue);
 
 export const problemStats = (data: AppData) => {
-  const list = data.problems ?? [];
+  const list = data.problems;
   const solved = list.filter((p) => p.status === 'solved');
   return {
     total: list.length,
@@ -261,8 +260,9 @@ export const projectState = (data: AppData, id: ProjectId): ProjectMark => {
   const saved = data.projects[id] ?? {};
   const savedMs = saved.milestones ?? [];
   const base: ProjectMilestone[] = def.milestones.map((title, i) => {
-    const found = savedMs.find((m) => m.id === `${id}-m${i}`);
-    return { id: `${id}-m${i}`, title, done: !!found?.done, custom: false };
+    const key = milestoneKey(id, i);
+    const found = savedMs.find((m) => m.id === key);
+    return { id: key, title, done: !!found?.done, custom: false };
   });
   const custom = savedMs.filter((m) => m.custom);
   return {
@@ -280,7 +280,9 @@ export const projectProgress = (data: AppData, id: ProjectId): Progress => {
 
 export const resourceState = (data: AppData, id: string): ResourceMark => {
   const saved = data.resources[id] ?? {};
-  return { status: saved.status ?? 'todo', progress: Number(saved.progress) || 0, note: saved.note ?? '' };
+  return { status: saved.status ?? 'not-started', progress: Number(saved.progress) || 0, note: saved.note ?? '' };
 };
 
-export { PHASES, PROJECTS, TOTAL_WEEKS };
+/* Sessions logged against a roadmap week, newest first. */
+export const sessionsForWeek = (data: AppData, week: number) =>
+  data.logs.filter((l) => l.week === week).sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : a.createdAt < b.createdAt ? 1 : -1));

@@ -1,34 +1,41 @@
-import { useRef, useState, type ChangeEvent } from 'react';
-import { exportJSON, useStore, validateImport, STORAGE_KEY, type AppData } from '@/store/useStore';
+import { useRef, useState, type ChangeEvent, type FormEvent } from 'react';
+import { defaultData, useStore, validateImport, type AppData } from '@/store/useStore';
 import { TOTAL_WEEKS } from '@/data/roadmap';
 import { currentWeek, weekRange } from '@/lib/derive';
-import { addDays, downloadText, fmtDateLong, today } from '@/lib/date';
+import { addDays, fmtDateLong, fmtRange, today } from '@/lib/date';
+import { useDraft } from '@/lib/useDraft';
+import { downloadBackup, downloadText } from '@/lib/download';
+import { progressReportMarkdown } from '@/lib/report';
 import { PageHead, toast } from '@/components/ui';
 import { CloudSyncCard } from '@/components/CloudSync';
-import { progressReportMarkdown } from '@/lib/report';
 import { Download, FileText } from '@/components/icons';
+
+const DEFAULT_TARGET = defaultData().weeklyTargetHours;
 
 export default function Settings() {
   const data = useStore();
   const { setStartDate, setWeeklyTarget, importData, resetData } = useStore();
-  const [start, setStart] = useState(data.startDate ?? '');
-  const [target, setTarget] = useState(String(data.weeklyTargetHours));
-  const [importError, setImportError] = useState<string | null>(null);
+  const [start, setStart] = useDraft(data.startDate ?? '', () => undefined);
+  const [target, setTarget] = useDraft(String(data.weeklyTargetHours), () => undefined);
+  const [importError, setImportError] = useState<{ friendly: string; detail: string } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const cw = currentWeek(data);
   const endDate = data.startDate ? addDays(data.startDate, TOTAL_WEEKS * 7 - 1) : null;
 
-  const savePlan = () => {
-    setStartDate(start || null);
+  const savePlan = (e: FormEvent) => {
+    e.preventDefault();
     const t = Number(target);
-    if (Number.isFinite(t) && t >= 0) setWeeklyTarget(t);
-    toast('Settings saved');
-  };
-
-  const onExport = () => {
-    downloadText(`swe-tracking-${today()}.json`, exportJSON());
-    toast('Backup downloaded');
+    if (!Number.isFinite(t) || t < 0) {
+      toast('The weekly target must be a number of hours, 0 or more.');
+      return;
+    }
+    if (!start && data.startDate) {
+      if (!window.confirm('Remove the start date? Week dates, the current week, and your pace will be hidden until you set one again.')) return;
+    }
+    setStartDate(start || null);
+    setWeeklyTarget(t);
+    toast('Plan settings saved.');
   };
 
   const onImport = async (e: ChangeEvent<HTMLInputElement>) => {
@@ -40,138 +47,140 @@ export default function Settings() {
       const parsed: unknown = JSON.parse(text);
       const err = validateImport(parsed);
       if (err) {
-        setImportError(err);
+        setImportError({ friendly: "This file isn't a tracker backup, or it's damaged. Choose a file made with \"Download backup\".", detail: err });
         return;
       }
-      const ok = window.confirm('Importing replaces everything currently saved in this browser. Continue?');
-      if (!ok) return;
+      if (!window.confirm('Restoring replaces everything currently saved in this browser (and, if signed in, in the cloud). Continue?')) return;
       importData(parsed as Partial<AppData>);
-      setStart((parsed as Partial<AppData>).startDate ?? '');
-      setTarget(String((parsed as Partial<AppData>).weeklyTargetHours ?? 10));
-      toast('Data imported');
+      toast('Backup restored.');
     } catch {
-      setImportError('Could not parse that file as JSON.');
+      setImportError({ friendly: "This file couldn't be read as a backup. Choose a .json file made with \"Download backup\".", detail: 'Invalid JSON' });
     } finally {
       if (fileRef.current) fileRef.current.value = '';
     }
   };
 
   const onReset = () => {
-    const ok = window.confirm('Reset all progress, logs, follow-ups, and notes? If you are signed in, the reset syncs to your other devices too. This cannot be undone. Export a backup first if you want one.');
-    if (!ok) return;
+    if (!window.confirm('Delete all progress, sessions, follow-ups, problems, and notes? If you are signed in, this also clears the cloud copy on every device. This cannot be undone.')) return;
     resetData();
-    setStart('');
-    setTarget('10');
-    toast('All data reset');
+    toast('All data deleted.');
   };
 
   const counts = {
     tasks: Object.values(data.tasks).filter((t) => t.done).length,
     logs: data.logs.length,
     followUps: data.followUps.length,
+    problems: data.problems.length,
     notes: Object.keys(data.weekNotes).length,
+    retros: Object.keys(data.retros).length,
   };
 
   return (
     <>
       <PageHead title="Settings" subtitle="Plan dates, weekly target, cloud sync, and backups." />
 
-      <CloudSyncCard />
+      <div className="stack">
+        <CloudSyncCard />
 
-      <div className="card">
-        <div className="card-head">
-          <h2>Plan</h2>
+        <div className="card">
+          <div className="card-head">
+            <h2>Plan</h2>
+          </div>
+          <form className="form-grid" onSubmit={savePlan}>
+            <div className="field">
+              <label htmlFor="set-start">Start date</label>
+              <input id="set-start" type="date" value={start} onChange={(e) => setStart(e.target.value)} aria-describedby="set-start-hint" />
+              <span id="set-start-hint" className="hint">
+                The day week 1 begins
+              </span>
+            </div>
+            <div className="field">
+              <label htmlFor="set-target">Weekly target (hours)</label>
+              <input id="set-target" type="number" min={0} step={0.5} value={target} onChange={(e) => setTarget(e.target.value)} aria-describedby="set-target-hint" />
+              <span id="set-target-hint" className="hint">
+                Default {DEFAULT_TARGET}h
+              </span>
+            </div>
+            <div className="form-actions">
+              <button className="btn primary" type="submit">
+                Save
+              </button>
+            </div>
+          </form>
+          {data.startDate && (
+            <dl className="kv section-sm">
+              <dt>Week 1</dt>
+              <dd>{fmtDateLong(data.startDate)}</dd>
+              <dt>Week {TOTAL_WEEKS} ends</dt>
+              <dd>{fmtDateLong(endDate)}</dd>
+              <dt>Today</dt>
+              <dd>{cw ? `Week ${cw} (${fmtRange(weekRange(data, cw), true)})` : '—'}</dd>
+            </dl>
+          )}
+          <p className="hint section-sm">Changing the start date shifts every week's dates. Ticked tasks and sessions are kept.</p>
         </div>
-        <div className="form-grid">
-          <div className="field">
-            <label htmlFor="set-start">Start date (week 1 begins)</label>
-            <input id="set-start" type="date" value={start} onChange={(e) => setStart(e.target.value)} />
+
+        <div className="card">
+          <div className="card-head">
+            <h2>Backup</h2>
           </div>
-          <div className="field">
-            <label htmlFor="set-target">Weekly target (hours)</label>
-            <input id="set-target" type="number" min={0} step={0.5} value={target} onChange={(e) => setTarget(e.target.value)} />
-          </div>
-          <div className="form-actions" style={{ marginTop: 0 }}>
-            <button className="btn primary" onClick={savePlan}>
-              Save
+          <p className="ink-2 small">Your data is saved in this browser and, if you're signed in, in the cloud. Download a backup file to keep your own copy or move to another device.</p>
+          <dl className="kv section-sm">
+            <dt>Tasks done</dt>
+            <dd>{counts.tasks}</dd>
+            <dt>Study sessions</dt>
+            <dd>{counts.logs}</dd>
+            <dt>Follow-ups</dt>
+            <dd>{counts.followUps}</dd>
+            <dt>DSA problems</dt>
+            <dd>{counts.problems}</dd>
+            <dt>Week notes</dt>
+            <dd>{counts.notes}</dd>
+            <dt>Retrospectives</dt>
+            <dd>{counts.retros}</dd>
+          </dl>
+          <div className="row section-sm">
+            <button
+              className="btn"
+              onClick={() => {
+                downloadBackup();
+                toast('Backup downloaded.');
+              }}
+            >
+              <Download size={15} /> Download backup
+            </button>
+            <button className="btn" onClick={() => fileRef.current?.click()}>
+              Restore from backup…
+            </button>
+            <input ref={fileRef} type="file" accept="application/json,.json" onChange={onImport} className="sr-only" tabIndex={-1} aria-hidden="true" />
+            <button
+              className="btn ghost"
+              onClick={() => {
+                downloadText(`swe-roadmap-report-${today()}.md`, progressReportMarkdown(data), 'text/markdown');
+                toast('Progress report downloaded.');
+              }}
+              title="A Markdown summary of every phase, week, project, and resource"
+            >
+              <FileText size={15} /> Progress report
             </button>
           </div>
+          {importError && (
+            <p className="error section-sm" role="alert" title={importError.detail}>
+              {importError.friendly}
+            </p>
+          )}
         </div>
-        {data.startDate && (
-          <dl className="kv" style={{ marginTop: 14 }}>
-            <dt>Week 1</dt>
-            <dd>{fmtDateLong(data.startDate)}</dd>
-            <dt>Week 36 ends</dt>
-            <dd>{fmtDateLong(endDate)}</dd>
-            <dt>Today</dt>
-            <dd>
-              {cw ? (
-                <>
-                  Week {cw} ({fmtDateLong(weekRange(data, cw)!.start)} – {fmtDateLong(weekRange(data, cw)!.end)})
-                </>
-              ) : (
-                '—'
-              )}
-            </dd>
-          </dl>
-        )}
-        <p className="hint" style={{ marginTop: 10 }}>
-          Changing the start date shifts every week's dates. Completed tasks and logs are unaffected.
-        </p>
-      </div>
 
-      <div className="card">
-        <div className="card-head">
-          <h2>Backup</h2>
-        </div>
-        <p className="muted small">
-          Data is cached in this browser (localStorage key <span className="mono">{STORAGE_KEY}</span>) and, when signed in, mirrored to the cloud. Export a JSON file for an offline backup.
-        </p>
-        <dl className="kv" style={{ marginTop: 10 }}>
-          <dt>Tasks done</dt>
-          <dd>{counts.tasks}</dd>
-          <dt>Sessions</dt>
-          <dd>{counts.logs}</dd>
-          <dt>Follow-ups</dt>
-          <dd>{counts.followUps}</dd>
-          <dt>Week notes</dt>
-          <dd>{counts.notes}</dd>
-        </dl>
-        <div className="row" style={{ marginTop: 14 }}>
-          <button className="btn" onClick={onExport}>
-            <Download size={15} /> Export JSON
-          </button>
-          <button className="btn" onClick={() => fileRef.current?.click()}>
-            Import JSON…
-          </button>
-          <button
-            className="btn ghost"
-            onClick={() => {
-              downloadText(`swe-roadmap-report-${today()}.md`, progressReportMarkdown(data), 'text/markdown');
-              toast('Progress report downloaded');
-            }}
-            title="A Markdown summary of every phase, week, project, and resource"
-          >
-            <FileText size={15} /> Progress report (.md)
-          </button>
-          <input ref={fileRef} type="file" accept="application/json,.json" onChange={onImport} className="sr-only" aria-label="Import JSON file" />
-        </div>
-        {importError && (
-          <p className="error" style={{ marginTop: 8 }}>
-            Import failed: {importError}
-          </p>
-        )}
-      </div>
-
-      <div className="card">
-        <div className="card-head">
-          <h2>Danger zone</h2>
-        </div>
-        <p className="muted small">Removes all progress, logs, follow-ups, notes, and settings from this browser.</p>
-        <div style={{ marginTop: 12 }}>
-          <button className="btn danger" onClick={onReset}>
-            Reset all data
-          </button>
+        <div className="card">
+          <div className="card-head">
+            <h2>Delete everything</h2>
+          </div>
+          <p className="ink-2 small">Deletes all your data here and, if signed in, on every synced device. Download a backup first if you might want it back.</p>
+          <div className="section-sm">
+            <button className="btn danger" onClick={onReset}>
+              Delete all data…
+            </button>
+          </div>
         </div>
       </div>
     </>

@@ -1,6 +1,6 @@
 # SWE Roadmap Tracker
 
-A personal tracker for the 36-week plan in `swe_software_engineer_roadmap_golang_systems.md`: weekly checklist, study log, follow-ups, side projects, resources, and an overview dashboard.
+A personal tracker for the 36-week plan in `swe_software_engineer_roadmap_golang_systems.md`: weekly checklist, study log, follow-ups, DSA reviews, side projects, resources, achievements, and an overview dashboard.
 
 ## Run
 
@@ -16,43 +16,39 @@ pnpm preview    # serve the production build
 
 ## What it does
 
-- **Overview**: current week and phase, on-track pace versus a linear schedule, hours this week against your target, streak, phase progress, this week's checklist, follow-ups due, hours-per-week chart, side project status.
-- **Weekly checklist**: all 36 weeks grouped by phase. Each week has its roadmap tasks and DSA item as checkboxes, plus your own tasks, notes, a quick time log, follow-ups linked to that week, and a retrospective (1–5 rating, what went well, what to improve). Weeks can be skipped.
-- **Focus timer**: start/stop in the sidebar; stopping logs the session to the study log. Optional 25-minute Pomodoro alert.
-- **Activity heatmap**: GitHub-style calendar of the last 26 weeks on the Overview.
-- **Study log**: sessions with date, hours, type, roadmap week, and note. Totals and a 12-week chart.
-- **Follow-ups**: questions, blockers, and things to revisit, with due dates, priority, and a linked week. Overdue items are flagged, and can be snoozed a week.
-- **DSA problems**: track problems with difficulty, topic, and week. Solved problems come back for review on a spaced schedule (1, 3, 7, 14, 30 days); due reviews show in the sidebar badge and on the Overview.
+- **Overview**: current week and phase, on-track pace versus an even schedule, a finish-date forecast at your current rate, hours this calendar week against your target, streak, phase progress, this week's checklist, follow-ups due, DSA reviews due, the activity calendar, hours-per-week chart, side project status, and the achievements closest to unlocking.
+- **Weekly checklist**: all 36 weeks grouped by phase. Each week has its roadmap tasks and DSA item as checkboxes, plus your own tasks (tagged "Yours"), notes, a session form, follow-ups linked to that week, a retrospective (1–5 rating, what went well, what to improve), and a summary you can copy as Markdown or download. "Mark all done", "Untick all" (with confirmation), and "Skip week" are there for catch-up weeks. Roadmap task text is Vietnamese as written.
+- **Focus timer**: start in the sidebar or the phone top bar. The sidebar widget asks for a type and note when you stop; the phone chip, the `t` shortcut, and the palette action log the session immediately as Study against the current week (edit it in the Study log). A 25-minute alert is on by default: it beeps, shows a toast, and, when the tab is in the background and you have allowed notifications, sends a system notification.
+- **Study log**: sessions with date, hours, type, roadmap week (auto-suggested from the date), and note. Totals, a 12-week chart, and the list grouped by day.
+- **Follow-ups**: questions, blockers, and things to revisit, with due date, priority, and roadmap week. Overdue items are flagged, can be snoozed a week, and their details edited in place.
+- **DSA problems**: problems with difficulty, topic, and week. "Mark solved" schedules reviews after 1, 3, 7, 14, then 30 days; due reviews show as a badge and on the Overview.
 - **Side projects**: the four portfolio projects with status, repo link, milestones (from the roadmap plus your own), and notes.
 - **Resources**: Boot.dev courses and the four books with status, progress, and notes.
-- **Milestones**: achievements earned from your data (streaks, hours, phases, DSA, projects, habits) with a "next up" card on the Overview.
-- **Search and shortcuts**: `⌘K` / `Ctrl+K` or `/` opens a palette that searches weeks, tasks, notes, follow-ups, problems, projects, and resources, plus quick actions (timer, theme, current week, backup). `g` then `o/w/l/f/d/p/r/m/s` jumps to a page; `t` starts or stops the timer.
-- **Reports**: each week page has "Copy as Markdown" for a week summary; Settings exports a whole-plan progress report as Markdown.
-- **Pace forecast**: the Overview projects your finish date from the completion rate so far.
-- **Settings**: plan start date, weekly hour target, cloud sync, JSON export/import, progress report, reset.
-- **Theme**: the button beside the app name cycles auto / light / dark (per device, not synced).
+- **Achievements**: earned automatically for streaks, hours, phases, DSA, projects, and habits.
+- **Search and shortcuts**: `⌘K` / `Ctrl+K`, `/`, or `?` opens a palette that searches weeks, tasks, notes, follow-ups, problems, projects, and resources, plus quick actions (timer, theme, current week, backup). `g` then `o` `w` `l` `f` `d` `p` `r` `m` `s` jumps to a page; `t` starts or stops the timer.
+- **Settings**: start date, weekly target, cloud sync, backup download and restore, a whole-plan progress report in Markdown, and delete-everything.
+- **Theme**: the button beside the app name cycles Auto / Light / Dark (per device, not synced).
 
 ## Data and multi-device sync
 
-Data is always cached in the browser's localStorage under `swe-tracking:v1`, so the app works offline and without any account. **Settings → Export JSON** gives you an offline backup.
+Data is always cached in the browser's localStorage under `swe-tracking:v1`, so the app works offline and without any account. **Settings → Download backup** gives you an offline copy.
 
 To use it across devices, connect a free Supabase project (hosted Postgres):
 
 1. Create a project at https://supabase.com and open **SQL → New query**. Paste and run `supabase/schema.sql`. It creates one `tracker_state` row per user, protected by row-level security, with realtime enabled.
-2. In **Authentication → Providers**, keep Email enabled. For the quickest start, turn off "Confirm email" so password sign-up signs you in immediately, or keep it on and confirm via the email Supabase sends.
+2. In **Authentication → Providers**, keep Email enabled. For the quickest start, turn off "Confirm email" so password sign-up signs you in immediately, or keep it on and confirm via the email Supabase sends. Magic-link sign-in ("Email me a sign-in link") also works with the default email provider.
 3. Copy `.env.example` to `.env.local` and fill in the project URL and anon key from **Project Settings → API**. Restart `pnpm dev`.
 4. Open **Settings → Cloud sync** in the app, create an account, and sign in on every device with the same email.
 
 How sync behaves:
 
-- The whole tracker is one JSON document per user. Every local change is uploaded after a short debounce; other signed-in devices receive it live through Supabase realtime, and also re-check on tab focus and when coming back online.
+- The whole tracker is one JSON document per user. Every local change is uploaded after 1.5 s of quiet; other signed-in devices receive it live through Supabase realtime, and also re-check on tab focus and when coming back online.
 - On sign-in the app compares timestamps: the newer of local and cloud wins, so an existing device's data is uploaded the first time, and a fresh device downloads it.
 - Conflicts are last-write-wins by change time, which is fine for one person editing from several devices but will drop the older of two simultaneous offline edits.
-- Signing out keeps the local copy on that device. Resetting data while signed in resets the cloud copy too.
+- Signing out keeps the local copy on that device. Deleting all data while signed in clears the cloud copy too.
+- Request budget: pulls are conditional (the server returns the document only when its copy is newer), focus and reconnect pulls are throttled to once per five minutes while realtime is connected and once per 30 seconds otherwise, and uploads are de-duplicated by a content hash so unchanged data is never re-sent. Settings → Cloud sync → Details shows the counts for the current session.
 
-Request budget: pulls are conditional (the server returns the document only when its copy is newer), focus and reconnect pulls are throttled to once per five minutes while realtime is connected, and pushes are de-duplicated by a content hash so unchanged data is never re-uploaded. Rapid edits coalesce into one upload after 1.5 s of quiet. Settings → Cloud sync shows the counts for the current session.
-
-When the env vars are absent, the Cloud sync card explains the setup and everything stays local.
+When the env vars are absent, the Cloud sync card says so and everything stays local.
 
 ## On a phone
 
@@ -60,8 +56,8 @@ The layout switches to a bottom tab bar and a "More" sheet under 860px. Open the
 
 ## Design
 
-Colors, type, spacing, component rules, and the icon set are documented in `DESIGN.md`. Use its tokens and classes when adding UI.
+Colors, type, spacing, component rules, vocabulary, accessibility rules, and the icon set are documented in `DESIGN.md`. Use its tokens and classes when adding UI.
 
 ## Stack
 
-Vite, React 18, TypeScript, react-router (hash routing, so it works from any static host), zustand with the persist middleware. No UI library; one stylesheet with light and dark themes. Roadmap content lives in `src/data/roadmap.ts`.
+Vite, React 18, TypeScript, react-router (hash routing, so it works from any static host), zustand with the persist middleware. No UI library; one stylesheet with light and dark themes. Roadmap content lives in `src/data/roadmap.ts`; labels in `src/lib/labels.ts`.

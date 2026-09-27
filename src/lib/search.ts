@@ -2,6 +2,8 @@
 import { PHASES, PROJECTS, RESOURCES, WEEKS } from '@/data/roadmap';
 import type { AppData } from '@/store/useStore';
 import { weekStatus } from '@/lib/derive';
+import { fmtDate } from '@/lib/date';
+import { DIFFICULTY_LABEL, PRIORITY_LABEL, STATUS_LABEL, TERMS } from '@/lib/labels';
 
 export type SearchKind = 'page' | 'week' | 'task' | 'note' | 'followup' | 'problem' | 'project' | 'resource' | 'action';
 
@@ -39,7 +41,7 @@ export const PAGES: { to: string; title: string; keywords: string }[] = [
   { to: '/dsa', title: 'DSA problems', keywords: 'dsa leetcode neetcode problems algorithms' },
   { to: '/projects', title: 'Side projects', keywords: 'projects portfolio' },
   { to: '/resources', title: 'Resources', keywords: 'books courses reading boot.dev' },
-  { to: '/milestones', title: 'Milestones', keywords: 'achievements badges streak' },
+  { to: '/milestones', title: TERMS.achievements, keywords: 'achievements milestones badges streak' },
   { to: '/settings', title: 'Settings', keywords: 'settings sync export import theme' },
 ];
 
@@ -62,7 +64,7 @@ export const buildIndex = (data: AppData): SearchItem[] => {
       id: `week:${w.week}`,
       kind: 'week',
       title: `Week ${w.week} · ${w.topic}`,
-      subtitle: `Phase ${phase.id} · ${st.replace('-', ' ')}`,
+      subtitle: `Phase ${phase.id} · ${STATUS_LABEL[st]}`,
       to: `/weeks/${w.week}`,
       keywords: norm(`week ${w.week} ${w.topic} ${w.dsa} phase ${phase.id} ${phase.title}`),
     });
@@ -70,12 +72,12 @@ export const buildIndex = (data: AppData): SearchItem[] => {
       items.push({ id: `task:${w.week}:${i}`, kind: 'task', title: t, subtitle: `Week ${w.week} · ${w.topic}`, to: `/weeks/${w.week}`, keywords: norm(`${t} week ${w.week}`) }),
     );
     items.push({ id: `task:${w.week}:dsa`, kind: 'task', title: `DSA: ${w.dsa}`, subtitle: `Week ${w.week}`, to: `/weeks/${w.week}`, keywords: norm(`dsa ${w.dsa} week ${w.week}`) });
-    for (const c of data.customTasks?.[String(w.week)] ?? []) {
-      items.push({ id: `task:${w.week}:c${c.id}`, kind: 'task', title: c.title, subtitle: `Week ${w.week} · your task`, to: `/weeks/${w.week}`, keywords: norm(`${c.title} week ${w.week}`) });
+    for (const c of data.customTasks[String(w.week)] ?? []) {
+      items.push({ id: `task:${w.week}:c${c.id}`, kind: 'task', title: c.title, subtitle: `Week ${w.week} · ${TERMS.yours}`, to: `/weeks/${w.week}`, keywords: norm(`${c.title} week ${w.week}`) });
     }
     const note = data.weekNotes[String(w.week)];
     if (note) items.push({ id: `note:${w.week}`, kind: 'note', title: note.slice(0, 90).replace(/\s+/g, ' '), subtitle: `Notes · Week ${w.week}`, to: `/weeks/${w.week}`, keywords: norm(note) });
-    const retro = data.retros?.[String(w.week)];
+    const retro = data.retros[String(w.week)];
     if (retro && (retro.wentWell || retro.improve)) {
       items.push({ id: `retro:${w.week}`, kind: 'note', title: `Retro: ${(retro.wentWell || retro.improve).slice(0, 80)}`, subtitle: `Retrospective · Week ${w.week}`, to: `/weeks/${w.week}`, keywords: norm(`${retro.wentWell} ${retro.improve} retro`) });
     }
@@ -86,17 +88,17 @@ export const buildIndex = (data: AppData): SearchItem[] => {
       id: `fu:${f.id}`,
       kind: 'followup',
       title: f.title,
-      subtitle: `${f.done ? 'Done' : 'Open'}${f.due ? ` · due ${f.due}` : ''}${f.week ? ` · week ${f.week}` : ''}`,
+      subtitle: `${f.done ? 'Done' : 'Open'}${f.due ? ` · due ${fmtDate(f.due)}` : ''}${f.week ? ` · week ${f.week}` : ''}`,
       to: '/followups',
-      keywords: norm(`${f.title} ${f.note} ${f.priority}`),
+      keywords: norm(`${f.title} ${f.note} ${PRIORITY_LABEL[f.priority]}`),
     });
   }
-  for (const p of data.problems ?? []) {
+  for (const p of data.problems) {
     items.push({
       id: `pb:${p.id}`,
       kind: 'problem',
       title: p.title,
-      subtitle: `${p.difficulty} · ${p.status}${p.topic ? ` · ${p.topic}` : ''}`,
+      subtitle: `${DIFFICULTY_LABEL[p.difficulty]} · ${p.status === 'solved' ? 'Solved' : 'To do'}${p.topic ? ` · ${p.topic}` : ''}`,
       to: '/dsa',
       keywords: norm(`${p.title} ${p.topic} ${p.difficulty} ${p.note}`),
     });

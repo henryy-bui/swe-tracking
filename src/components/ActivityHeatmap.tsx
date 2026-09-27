@@ -1,4 +1,5 @@
-import { addDays, fmtDate, fmtHours, today, weekStart } from '@/lib/date';
+import { addDays, fmtDate, fmtDateLong, today, weekStart } from '@/lib/date';
+import { fmtHours } from '@/lib/format';
 import { useContainerWidth } from '@/lib/useContainerWidth';
 
 interface Props {
@@ -19,9 +20,8 @@ const level = (minutes: number, active: boolean): number => {
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const GAP = 3;
 
-/* GitHub-style calendar. Columns are weeks (Mon-Sun), rows are weekdays.
-   Cell size and week count are computed from the measured container width in pixels,
-   so the grid never overflows and never depends on aspect-ratio support. */
+/* GitHub-style calendar. Columns are weeks (Mon-Sun), rows are weekdays. Cell size and week count
+   come from the measured container width. A visually hidden table carries the per-day values. */
 export function ActivityHeatmap({ minutesByDay, activeDays, maxWeeks = 26 }: Props) {
   const [ref, width] = useContainerWidth<HTMLDivElement>();
   const weeks = Math.min(maxWeeks, width >= 640 ? 26 : width >= 480 ? 20 : 14);
@@ -36,7 +36,6 @@ export function ActivityHeatmap({ minutesByDay, activeDays, maxWeeks = 26 }: Pro
     columns.push(col);
   }
 
-  // Month label when a column starts a new month, skipped if the previous label is too close to fit.
   let lastLabelAt = -10;
   const labels = columns.map((col, i) => {
     const m = Number(col[0].slice(5, 7)) - 1;
@@ -49,10 +48,11 @@ export function ActivityHeatmap({ minutesByDay, activeDays, maxWeeks = 26 }: Pro
   const totalMinutes = [...minutesByDay.entries()].filter(([d]) => d >= firstMonday && d <= end).reduce((s, [, m]) => s + m, 0);
   const activeCount = [...activeDays].filter((d) => d >= firstMonday && d <= end).length;
   const columnsStyle = { gridTemplateColumns: `repeat(${weeks}, ${cell}px)`, gap: GAP };
+  const daysWithActivity = columns.flat().filter((d) => d <= end && (activeDays.has(d) || (minutesByDay.get(d) ?? 0) > 0));
 
   return (
     <div className="heatmap-wrap" ref={ref}>
-      <div className="heatmap" role="img" aria-label={`Activity over the last ${weeks} weeks: ${activeCount} active days, ${fmtHours(totalMinutes)} logged.`}>
+      <div className="heatmap" aria-hidden="true">
         <div className="heatmap-months" style={columnsStyle}>
           {labels.map((l, i) => (
             <span key={i}>{l}</span>
@@ -65,20 +65,43 @@ export function ActivityHeatmap({ minutesByDay, activeDays, maxWeeks = 26 }: Pro
                 const future = day > end;
                 const minutes = minutesByDay.get(day) ?? 0;
                 const lv = future ? -1 : level(minutes, activeDays.has(day));
-                const title = future ? '' : `${fmtDate(day, { weekday: 'short', day: 'numeric', month: 'short' })}: ${minutes ? fmtHours(minutes) : activeDays.has(day) ? 'active' : 'no activity'}`;
+                const title = future ? '' : `${fmtDate(day)}: ${minutes ? fmtHours(minutes) : activeDays.has(day) ? 'active' : 'no activity'}`;
                 return <span key={day} className={`cell${future ? ' future' : ''} l${Math.max(lv, 0)}`} style={{ width: cell, height: cell }} title={title} />;
               })}
             </div>
           ))}
         </div>
       </div>
-      <div className="row between small muted" style={{ marginTop: 8 }}>
+
+      {/* Screen-reader version of the same data. */}
+      <table className="sr-only">
+        <caption>
+          Activity over the last {weeks} weeks: {activeCount} active days, {fmtHours(totalMinutes)} logged.
+        </caption>
+        <thead>
+          <tr>
+            <th scope="col">Day</th>
+            <th scope="col">Logged</th>
+          </tr>
+        </thead>
+        <tbody>
+          {daysWithActivity.map((d) => (
+            <tr key={d}>
+              <td>{fmtDateLong(d)}</td>
+              <td>{minutesByDay.get(d) ? fmtHours(minutesByDay.get(d)!) : 'active, no time logged'}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
+      <div className="row between small ink-2 section-sm">
         <span>
           {activeCount} active days · {fmtHours(totalMinutes)} logged
         </span>
-        <span className="heatmap-legend">
-          Less
-          {[0, 2, 3, 4, 5].map((l) => (
+        <span className="heatmap-legend" aria-hidden="true">
+          <span className="cell l1" /> active
+          <span className="legend-gap">Less</span>
+          {[2, 3, 4, 5].map((l) => (
             <span key={l} className={`cell l${l}`} />
           ))}
           More

@@ -5,9 +5,12 @@ import {
   isDone, minutesForRoadmapWeek, overallProgress, phaseProgress, projectProgress, projectState, resourceState, streak, taskItems, totalMinutes,
   weekProgress, weekRange, weekStatus,
 } from '@/lib/derive';
-import { fmtDate, fmtHours, pct, today } from '@/lib/date';
+import { fmtDateFull, fmtRange, today } from '@/lib/date';
+import { fmtHours, pct } from '@/lib/format';
+import { LOG_TAG_LABEL, RATING_LABEL, STATUS_LABEL, type Status } from '@/lib/labels';
 
 const line = (s = '') => s + '\n';
+const stars = (n: number) => '★'.repeat(n) + '☆'.repeat(5 - n);
 
 export const weekSummaryMarkdown = (data: AppData, week: number): string => {
   const def = weekDef(week);
@@ -18,22 +21,22 @@ export const weekSummaryMarkdown = (data: AppData, week: number): string => {
   const minutes = minutesForRoadmapWeek(data, week);
   const sessions = data.logs.filter((l) => l.week === week);
   const followUps = data.followUps.filter((f) => f.week === week);
-  const problems = (data.problems ?? []).filter((p) => p.week === week);
-  const retro = data.retros?.[String(week)];
+  const problems = data.problems.filter((p) => p.week === week);
+  const retro = data.retros[String(week)];
   const note = data.weekNotes[String(week)];
 
   let md = '';
   md += line(`# Week ${week}: ${def.topic}`);
-  md += line(`Phase ${phase.id} · ${phase.title}${range ? ` · ${fmtDate(range.start)} – ${fmtDate(range.end)}` : ''}`);
+  md += line(`Phase ${phase.id} · ${phase.title}${range ? ` · ${fmtRange(range)}` : ''}`);
   md += line();
-  md += line(`**Status:** ${weekStatus(data, week)} · ${wp.done}/${wp.total} items · ${fmtHours(minutes)} logged in ${sessions.length} session${sessions.length === 1 ? '' : 's'}`);
+  md += line(`**Status:** ${STATUS_LABEL[weekStatus(data, week)]} · ${wp.done}/${wp.total} tasks · ${fmtHours(minutes)} logged in ${sessions.length} session${sessions.length === 1 ? '' : 's'}`);
   md += line();
   md += line('## Checklist');
   for (const it of items) md += line(`- [${isDone(data, it.key) ? 'x' : ' '}] ${it.kind === 'dsa' ? 'DSA: ' : ''}${it.label}`);
   if (retro && (retro.rating || retro.wentWell || retro.improve)) {
     md += line();
     md += line('## Retrospective');
-    if (retro.rating) md += line(`Rating: ${'★'.repeat(retro.rating)}${'☆'.repeat(5 - retro.rating)}`);
+    if (retro.rating) md += line(`Rating: ${stars(retro.rating)} ${RATING_LABEL[retro.rating]}`);
     if (retro.wentWell) md += line(`**Went well:** ${retro.wentWell}`);
     if (retro.improve) md += line(`**Improve:** ${retro.improve}`);
   }
@@ -50,12 +53,12 @@ export const weekSummaryMarkdown = (data: AppData, week: number): string => {
   if (followUps.length) {
     md += line();
     md += line('## Follow-ups');
-    for (const f of followUps) md += line(`- [${f.done ? 'x' : ' '}] ${f.title}${f.due ? ` (due ${f.due})` : ''}`);
+    for (const f of followUps) md += line(`- [${f.done ? 'x' : ' '}] ${f.title}${f.due ? ` (due ${fmtDateFull(f.due)})` : ''}`);
   }
   if (sessions.length) {
     md += line();
     md += line('## Sessions');
-    for (const s of [...sessions].sort((a, b) => (a.date < b.date ? -1 : 1))) md += line(`- ${s.date} · ${fmtHours(s.minutes)} · ${s.tag}${s.note ? ` · ${s.note}` : ''}`);
+    for (const s of [...sessions].sort((a, b) => (a.date < b.date ? -1 : 1))) md += line(`- ${fmtDateFull(s.date)} · ${fmtHours(s.minutes)} · ${LOG_TAG_LABEL[s.tag]}${s.note ? ` · ${s.note}` : ''}`);
   }
   return md;
 };
@@ -63,13 +66,13 @@ export const weekSummaryMarkdown = (data: AppData, week: number): string => {
 export const progressReportMarkdown = (data: AppData): string => {
   const overall = overallProgress(data);
   const hours = totalMinutes(data);
-  const problems = data.problems ?? [];
+  const problems = data.problems;
   const solved = problems.filter((p) => p.status === 'solved').length;
   let md = '';
   md += line(`# SWE Roadmap progress report`);
-  md += line(`Generated ${fmtDate(today(), { day: 'numeric', month: 'long', year: 'numeric' })}${data.startDate ? ` · plan started ${fmtDate(data.startDate, { day: 'numeric', month: 'long', year: 'numeric' })}` : ''}`);
+  md += line(`Generated ${fmtDateFull(today())}${data.startDate ? ` · plan started ${fmtDateFull(data.startDate)}` : ''}`);
   md += line();
-  md += line(`- Items: **${overall.done} / ${overall.total}** (${pct(overall.done, overall.total)}%) · weeks complete: ${overall.weeksDone} / ${TOTAL_WEEKS}`);
+  md += line(`- Tasks: **${overall.done} / ${overall.total}** (${pct(overall.done, overall.total)}%) · weeks complete: ${overall.weeksDone} / ${TOTAL_WEEKS}`);
   md += line(`- Study time: **${fmtHours(hours)}** across ${data.logs.length} sessions · current streak ${streak(data)} days`);
   md += line(`- DSA: ${solved} solved of ${problems.length} tracked`);
   md += line(`- Follow-ups: ${data.followUps.filter((f) => f.done).length} closed, ${data.followUps.filter((f) => !f.done).length} open`);
@@ -83,25 +86,25 @@ export const progressReportMarkdown = (data: AppData): string => {
   }
   md += line();
   md += line('## Weeks');
-  md += line('| Week | Topic | Status | Items | Hours | Rating |');
+  md += line('| Week | Topic | Status | Tasks | Hours | Rating |');
   md += line('|---|---|---|---|---|---|');
   for (let w = 1; w <= TOTAL_WEEKS; w++) {
     const wp = weekProgress(data, w);
-    const r = data.retros?.[String(w)]?.rating ?? 0;
-    md += line(`| ${w} | ${weekDef(w).topic} | ${weekStatus(data, w)} | ${wp.done}/${wp.total} | ${fmtHours(minutesForRoadmapWeek(data, w))} | ${r ? '★'.repeat(r) : ''} |`);
+    const r = data.retros[String(w)]?.rating ?? 0;
+    md += line(`| ${w} | ${weekDef(w).topic} | ${STATUS_LABEL[weekStatus(data, w)]} | ${wp.done}/${wp.total} | ${fmtHours(minutesForRoadmapWeek(data, w))} | ${r ? '★'.repeat(r) : ''} |`);
   }
   md += line();
   md += line('## Side projects');
   for (const p of PROJECTS) {
     const st = projectState(data, p.id);
     const pp = projectProgress(data, p.id);
-    md += line(`- **${p.number}. ${p.title}** — ${st.status.replace('-', ' ')} · ${pp.done}/${pp.total} milestones${st.repo ? ` · ${st.repo}` : ''}`);
+    md += line(`- **${p.number}. ${p.title}** — ${STATUS_LABEL[st.status as Status]} · ${pp.done}/${pp.total} milestones${st.repo ? ` · ${st.repo}` : ''}`);
   }
   md += line();
   md += line('## Resources');
   for (const r of RESOURCES) {
     const st = resourceState(data, r.id);
-    md += line(`- ${r.title} — ${st.status.replace('-', ' ')}${r.type === 'book' ? ` (${st.progress}%)` : ''}`);
+    md += line(`- ${r.title} — ${STATUS_LABEL[st.status as Status]}${r.type === 'book' ? ` (${st.progress}%)` : ''}`);
   }
   return md;
 };

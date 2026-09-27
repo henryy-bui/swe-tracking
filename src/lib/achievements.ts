@@ -48,11 +48,11 @@ const make = (a: Omit<Achievement, 'unlocked' | 'progress' | 'detail'> & { unit?
 export const achievements = (data: AppData): Achievement[] => {
   const overall = overallProgress(data);
   const hours = totalMinutes(data) / 60;
-  const problems = data.problems ?? [];
+  const problems = data.problems;
   const solved = problems.filter((p) => p.status === 'solved').length;
   const reviews = problems.reduce((s, p) => s + p.reviewCount, 0);
   const hardSolved = problems.filter((p) => p.status === 'solved' && p.difficulty === 'hard').length;
-  const retros = Object.values(data.retros ?? {}).filter((r) => r.rating > 0 || r.wentWell || r.improve).length;
+  const retros = Object.values(data.retros).filter((r) => r.rating > 0 || r.wentWell || r.improve).length;
   const closedFollowUps = data.followUps.filter((f) => f.done).length;
   const best = Math.max(bestStreak(data), streak(data));
   const sessions = data.logs.length;

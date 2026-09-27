@@ -1,384 +1,419 @@
 import { useState, type FormEvent } from 'react';
-import { Link } from 'react-router-dom';
-import { useStore } from '@/store/useStore';
+import { useStore, type AppData } from '@/store/useStore';
 import { PHASES, PROJECTS, TOTAL_WEEKS, phaseOfWeek, weekDef } from '@/data/roadmap';
 import {
-  activeDays, currentWeek, dueProblems, expectedDone, forecast, isOverdue, minutesByCalendarWeek, minutesByDay, minutesThisWeek, openFollowUps, overallProgress,
-  overdueFollowUps, pace, phaseProgress, planStatus, projectProgress, projectState, sortFollowUps, streak, taskItems, isDone, weekProgress, weekRange, weekStatus,
+  activeDays, currentWeek, dueProblems, expectedDone, forecast, minutesByCalendarWeek, minutesByDay, minutesThisWeek, openFollowUps, overallProgress,
+  overdueFollowUps, pace, phaseProgress, planStatus, projectProgress, projectState, sortFollowUps, streak, weekProgress, weekRange, weekStatus,
 } from '@/lib/derive';
 import { achievements, nextUp, unlockedCount } from '@/lib/achievements';
-import { diffDays, fmtDate, fmtHours, pct, plural, relDay, today } from '@/lib/date';
-import { EmptyState, PageHead, ProgressBar, ProgressLine, StatTile, StatusPill, WeekLink } from '@/components/ui';
+import { diffDays, fmtDateFull, fmtDateWeekday, fmtRange, relDay, today } from '@/lib/date';
+import { fmtHours, pct, plural } from '@/lib/format';
+import { TERMS } from '@/lib/labels';
+import { Arrow, DueLabel, EmptyState, MoreLink, PageHead, PriorityPill, ProgressBar, ProgressLine, StatTile, StatusPill, Vi, WeekLink, toast } from '@/components/ui';
 import { WeeklyHoursChart } from '@/components/WeeklyHoursChart';
 import { ActivityHeatmap } from '@/components/ActivityHeatmap';
-import { toast } from '@/components/ui';
+import { TaskChecklist } from '@/components/TaskChecklist';
 import { AlertTriangle, RefreshCw, Target, TrendingDown, TrendingUp } from '@/components/icons';
-
-const PROJECT_STATUS_LABEL = { 'not-started': 'Not started', 'in-progress': 'In progress', done: 'Done' } as const;
 
 export default function Overview() {
   const data = useStore();
-  const setStartDate = useStore((s) => s.setStartDate);
-  const setTask = useStore((s) => s.setTask);
-  const [start, setStart] = useState(today());
-
   const status = planStatus(data);
   const cw = currentWeek(data);
+
+  return (
+    <>
+      <PageHead title="Overview" subtitle={fmtDateWeekday(today())} />
+      <div className="stack">
+        {status === 'unset' && <StartDateBanner />}
+        <HeroCard data={data} />
+        <Tiles data={data} />
+        <PhasesCard data={data} />
+        <div className="grid-2">
+          <ThisWeekCard data={data} />
+          <FollowUpsDueCard data={data} />
+        </div>
+        <ActivityCard data={data} />
+        <div className="grid-2">
+          <HoursCard data={data} />
+          <ProjectsSummaryCard data={data} />
+        </div>
+        <AchievementsNextCard data={data} />
+        {status === 'active' && cw && cw < TOTAL_WEEKS && <ComingUpCard data={data} cw={cw} />}
+      </div>
+    </>
+  );
+}
+
+function StartDateBanner() {
+  const setStartDate = useStore((s) => s.setStartDate);
+  const [start, setStart] = useState(today());
+  const submit = (e: FormEvent) => {
+    e.preventDefault();
+    if (!start) return;
+    setStartDate(start);
+    toast('Start date saved. Week dates and pace are now shown.');
+  };
+  return (
+    <div className="banner">
+      <div className="grow">
+        <strong>Pick the day week 1 begins.</strong>
+        <div className="small">You can tick tasks already; dates, the current week, and your pace appear once a start date is set.</div>
+      </div>
+      <form onSubmit={submit}>
+        <input type="date" value={start} onChange={(e) => setStart(e.target.value)} aria-label="Start date of week 1" required />
+        <button className="btn primary" type="submit">
+          Set start date
+        </button>
+      </form>
+    </div>
+  );
+}
+
+function PaceBadge({ data }: { data: AppData }) {
+  const p = pace(data);
+  const expected = expectedDone(data);
+  if (!p) return null;
+  const Icon = p.kind === 'ahead' ? TrendingUp : p.kind === 'behind' ? TrendingDown : Target;
+  const text = p.kind === 'on-track' ? 'On track' : p.kind === 'ahead' ? `${plural(p.delta, TERMS.task)} ahead` : `${plural(-p.delta, TERMS.task)} behind`;
+  return (
+    <div className={`pace ${p.kind}`} title={`If the plan were spread evenly, about ${expected} ${TERMS.tasks} would be done by today.`}>
+      <Icon size={16} /> {text}
+    </div>
+  );
+}
+
+function ForecastLine({ data }: { data: AppData }) {
+  const fc = forecast(data);
+  if (!fc) return null;
+  const rate = Math.round(fc.ratePerWeek);
+  const tail = Math.abs(fc.deltaWeeks) < 0.5 ? 'right on plan.' : fc.deltaWeeks < 0 ? `${plural(Math.round(-fc.deltaWeeks), 'week')} early.` : `${plural(Math.round(fc.deltaWeeks), 'week')} late.`;
+  return (
+    <div className="sub small">
+      At your current pace (about {plural(rate, TERMS.task)} a week) you'll finish around <strong>{fmtDateFull(fc.finishDate)}</strong>, {tail}
+    </div>
+  );
+}
+
+function HeroCard({ data }: { data: AppData }) {
+  const status = planStatus(data);
+  const cw = currentWeek(data);
+  const overall = overallProgress(data);
+  return (
+    <div className="card">
+      <div className="hero">
+        <div>
+          {status === 'active' && cw && (
+            <>
+              <div className="kicker">
+                Week {cw} of {TOTAL_WEEKS} · Phase {phaseOfWeek(cw).id}: {phaseOfWeek(cw).title}
+              </div>
+              <h2>
+                <Vi>{weekDef(cw).topic}</Vi>
+              </h2>
+              <div className="sub">
+                Day {diffDays(weekRange(data, cw)!.start, today()) + 1} of 7 · {fmtRange(weekRange(data, cw))} · {overall.weeksDone} weeks completed
+              </div>
+              <ForecastLine data={data} />
+            </>
+          )}
+          {status === 'upcoming' && (
+            <>
+              <div className="kicker">Plan starts {relDay(data.startDate!)}</div>
+              <h2>
+                <Vi>{weekDef(1).topic}</Vi>
+              </h2>
+              <div className="sub">Week 1 begins on {fmtDateWeekday(data.startDate)}.</div>
+            </>
+          )}
+          {status === 'finished' && (
+            <>
+              <div className="kicker">All {TOTAL_WEEKS} weeks are behind you</div>
+              <h2>Plan period finished</h2>
+              <div className="sub">
+                {overall.done} of {overall.total} {TERMS.tasks} done. Keep ticking off what's left, or move the start date in Settings to run it again.
+              </div>
+            </>
+          )}
+          {status === 'unset' && (
+            <>
+              <div className="kicker">
+                {TOTAL_WEEKS}-week plan · {PHASES.length} phases · {overall.total} {TERMS.tasks}
+              </div>
+              <h2>
+                Frontend <Arrow /> Senior Fullstack / Software Engineer
+              </h2>
+              <div className="sub">Golang backend, distributed systems, AWS, and AI-native work.</div>
+            </>
+          )}
+        </div>
+        <PaceBadge data={data} />
+      </div>
+    </div>
+  );
+}
+
+function Tiles({ data }: { data: AppData }) {
   const overall = overallProgress(data);
   const thisWeekMin = minutesThisWeek(data);
   const targetMin = data.weeklyTargetHours * 60;
   const days = streak(data);
   const open = openFollowUps(data);
   const overdue = overdueFollowUps(data);
-  const p = pace(data);
-  const expected = expectedDone(data);
-  const buckets = minutesByCalendarWeek(data, 12);
-  const dueSoon = sortFollowUps(open).slice(0, 6);
-  const reviewsDue = dueProblems(data).length;
-  const fc = forecast(data);
-  const badges = achievements(data);
-  const badgesNext = nextUp(badges, 3);
-
-  const submitStart = (e: FormEvent) => {
-    e.preventDefault();
-    if (!start) return;
-    setStartDate(start);
-    toast('Start date saved');
-  };
-
   return (
-    <>
-      <PageHead title="Overview" subtitle={fmtDate(today(), { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })} />
+    <div className="grid-tiles">
+      <StatTile label="Overall progress" value={`${pct(overall.done, overall.total)}%`} sub={`${overall.done} of ${overall.total} ${TERMS.tasks} · ${overall.weeksDone} of ${TOTAL_WEEKS} weeks`} />
+      <StatTile
+        label="Hours this calendar week"
+        value={fmtHours(thisWeekMin)}
+        sub={targetMin > 0 ? `Mon–Sun · ${pct(thisWeekMin, targetMin)}% of your ${data.weeklyTargetHours}h target` : 'Mon–Sun · no weekly target set'}
+      />
+      <StatTile label="Streak" value={plural(days, 'day')} sub={days > 0 ? 'Days in a row with activity' : 'Log a session or tick a task today'} />
+      <StatTile
+        label="Follow-ups open"
+        value={open.length}
+        sub={
+          overdue.length > 0 ? (
+            <span className="pill overdue">
+              <AlertTriangle size={12} /> {plural(overdue.length, 'overdue')}
+            </span>
+          ) : (
+            'Nothing overdue'
+          )
+        }
+      />
+    </div>
+  );
+}
 
-      {status === 'unset' && (
-        <div className="banner">
-          <div className="grow">
-            <strong>Set your start date</strong> to unlock the current week, on-track pace, and week dates.
-          </div>
-          <form onSubmit={submitStart}>
-            <input type="date" value={start} onChange={(e) => setStart(e.target.value)} aria-label="Plan start date" required />
-            <button className="btn primary" type="submit">
-              Start plan
-            </button>
-          </form>
+function PhasesCard({ data }: { data: AppData }) {
+  return (
+    <div className="card">
+      <div className="card-head">
+        <h2>Phases</h2>
+        <MoreLink to="/weeks">All weeks</MoreLink>
+      </div>
+      <div className="stack">
+        {PHASES.map((ph) => {
+          const pp = phaseProgress(data, ph.id);
+          return (
+            <ProgressLine
+              key={ph.id}
+              title={
+                <span>
+                  <strong>Phase {ph.id}</strong> · {ph.title}{' '}
+                  <span className="ink-3 small">
+                    (weeks {ph.weeks[0]}–{ph.weeks[1]})
+                  </span>
+                </span>
+              }
+              done={pp.done}
+              total={pp.total}
+              right={`${pp.weeksDone}/${pp.weeks} weeks · ${pct(pp.done, pp.total)}%`}
+              valueText={`${pp.done} of ${pp.total} ${TERMS.tasks}, ${pp.weeksDone} of ${pp.weeks} weeks`}
+            />
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function ThisWeekCard({ data }: { data: AppData }) {
+  const cw = currentWeek(data);
+  const week = cw ?? 1;
+  const wp = weekProgress(data, week);
+  return (
+    <div className="card">
+      <div className="card-head">
+        <h2>{cw ? `This week · Week ${cw}` : 'Week 1 preview'}</h2>
+        <span className="row">
+          <StatusPill status={weekStatus(data, week)} />
+          <MoreLink to={`/weeks/${week}`} ariaLabel={`Open week ${week}`}>
+            Open
+          </MoreLink>
+        </span>
+      </div>
+      <div className="small ink-2 section-xs-b">
+        <Vi>{weekDef(week).topic}</Vi>
+      </div>
+      <TaskChecklist week={week} />
+      <div className="small ink-3 section-xs">
+        {wp.done} of {wp.total} done
+      </div>
+    </div>
+  );
+}
+
+function FollowUpsDueCard({ data }: { data: AppData }) {
+  const dueSoon = sortFollowUps(openFollowUps(data)).slice(0, 6);
+  const reviewsDue = dueProblems(data).length;
+  return (
+    <div className="card">
+      <div className="card-head">
+        <h2>Follow-ups</h2>
+        <MoreLink to="/followups">All follow-ups</MoreLink>
+      </div>
+      {reviewsDue > 0 && (
+        <div className="row section-xs-b">
+          <span className="pill accent">
+            <RefreshCw size={12} /> {plural(reviewsDue, 'DSA problem')} to review
+          </span>
+          <MoreLink to="/dsa" ariaLabel="Review due DSA problems">
+            Review
+          </MoreLink>
         </div>
       )}
+      {dueSoon.length === 0 ? (
+        <EmptyState to="/followups" linkText="Add one on the Follow-ups page.">
+          Nothing to follow up. Capture questions, blockers, or things to revisit.
+        </EmptyState>
+      ) : (
+        <ul className="list">
+          {dueSoon.map((f) => (
+            <li key={f.id}>
+              <div className="body">
+                <div className="title">{f.title}</div>
+                <div className="meta">
+                  <DueLabel followUp={f} />
+                  {f.priority === 'high' && <PriorityPill priority="high" />}
+                  {f.week && <WeekLink week={f.week} />}
+                </div>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
 
-      <div className="card">
-        <div className="hero">
-          <div>
-            {status === 'active' && cw && (
-              <>
-                <div className="kicker">
-                  Week {cw} of {TOTAL_WEEKS} · Phase {phaseOfWeek(cw).id}: {phaseOfWeek(cw).title}
-                </div>
-                <h2>{weekDef(cw).topic}</h2>
-                <div className="sub">
-                  {(() => {
-                    const r = weekRange(data, cw)!;
-                    const dayNo = diffDays(r.start, today()) + 1;
-                    return `Day ${dayNo} of 7 · ${fmtDate(r.start)} – ${fmtDate(r.end)} · ${overall.weeksDone} weeks completed`;
-                  })()}
-                </div>
-                {fc && (
-                  <div className="sub small">
-                    At {Math.round(fc.ratePerWeek * 10) / 10} items/week you finish around <strong>{fmtDate(fc.finishDate, { day: 'numeric', month: 'short', year: 'numeric' })}</strong>
-                    {Math.abs(fc.deltaWeeks) < 0.5
-                      ? ', right on plan.'
-                      : fc.deltaWeeks < 0
-                        ? `, ${plural(Math.round(-fc.deltaWeeks), 'week')} early.`
-                        : `, ${plural(Math.round(fc.deltaWeeks), 'week')} late.`}
-                  </div>
-                )}
-              </>
-            )}
-            {status === 'upcoming' && (
-              <>
-                <div className="kicker">Plan starts {relDay(data.startDate!)}</div>
-                <h2>{weekDef(1).topic}</h2>
-                <div className="sub">Week 1 begins on {fmtDate(data.startDate, { weekday: 'long', day: 'numeric', month: 'long' })}.</div>
-              </>
-            )}
-            {status === 'finished' && (
-              <>
-                <div className="kicker">36 weeks elapsed</div>
-                <h2>Plan window complete</h2>
-                <div className="sub">
-                  {overall.done} of {overall.total} items done. Keep ticking off what is left, or reset the start date in Settings.
-                </div>
-              </>
-            )}
-            {status === 'unset' && (
-              <>
-                <div className="kicker">36-week plan · 4 phases · {overall.total} items</div>
-                <h2>Frontend → Senior Fullstack / Software Engineer</h2>
-                <div className="sub">Golang backend, distributed systems, AWS, and AI-native work.</div>
-              </>
-            )}
-          </div>
-          {p && (
-            <div className={`pace ${p.kind}`} title={`Expected about ${expected} items done by today at a linear pace.`}>
-              {p.kind === 'ahead' ? <TrendingUp size={16} /> : p.kind === 'behind' ? <TrendingDown size={16} /> : <Target size={16} />}
-              {p.kind === 'on-track' && 'On track'}
-              {p.kind === 'ahead' && `Ahead by ${plural(p.delta, 'item')}`}
-              {p.kind === 'behind' && `Behind by ${plural(-p.delta, 'item')}`}
-            </div>
-          )}
-        </div>
+function ActivityCard({ data }: { data: AppData }) {
+  return (
+    <div className="card">
+      <div className="card-head">
+        <h2>Activity · last 26 weeks</h2>
+        <span className="small ink-2">Days with logged time or ticks</span>
       </div>
+      <ActivityHeatmap minutesByDay={minutesByDay(data)} activeDays={activeDays(data)} />
+    </div>
+  );
+}
 
-      <div className="grid-tiles" style={{ marginTop: 14 }}>
-        <StatTile label="Overall progress" value={`${pct(overall.done, overall.total)}%`} sub={`${overall.done} / ${overall.total} items · ${overall.weeksDone} / ${TOTAL_WEEKS} weeks`} />
-        <StatTile
-          label="Hours this week"
-          value={fmtHours(thisWeekMin)}
-          sub={targetMin > 0 ? `${pct(thisWeekMin, targetMin)}% of ${data.weeklyTargetHours}h target` : 'No weekly target set'}
-        />
-        <StatTile label="Streak" value={plural(days, 'day')} sub={days > 0 ? 'Consecutive days with activity' : 'Log time or tick a task today'} />
-        <StatTile
-          label="Follow-ups"
-          value={open.length}
-          sub={
-            overdue.length > 0 ? (
-              <span className="pill overdue">
-                <AlertTriangle size={12} /> {plural(overdue.length, 'overdue')}
-              </span>
-            ) : (
-              'Nothing overdue'
-            )
-          }
-        />
+function HoursCard({ data }: { data: AppData }) {
+  return (
+    <div className="card">
+      <div className="card-head">
+        <h2>Study hours · last 12 weeks</h2>
+        <MoreLink to="/log">Study log</MoreLink>
       </div>
+      {data.logs.length === 0 ? (
+        <EmptyState to="/log" linkText="Log a session.">
+          No sessions yet. Use the focus timer or log time by hand.
+        </EmptyState>
+      ) : (
+        <WeeklyHoursChart buckets={minutesByCalendarWeek(data, 12)} targetMinutes={data.weeklyTargetHours * 60} />
+      )}
+    </div>
+  );
+}
 
-      <div className="card" style={{ marginTop: 14 }}>
-        <div className="card-head">
-          <h2>Phases</h2>
-          <Link to="/weeks" className="small">
-            All weeks →
-          </Link>
-        </div>
+function ProjectsSummaryCard({ data }: { data: AppData }) {
+  return (
+    <div className="card">
+      <div className="card-head">
+        <h2>Side projects</h2>
+        <MoreLink to="/projects" ariaLabel="Side project details">
+          Details
+        </MoreLink>
+      </div>
+      <div className="stack">
+        {PROJECTS.map((pr) => {
+          const st = projectState(data, pr.id);
+          const pp = projectProgress(data, pr.id);
+          return (
+            <ProgressLine
+              key={pr.id}
+              title={
+                <span>
+                  <strong>{pr.number}.</strong> {pr.title} <StatusPill status={st.status} />
+                </span>
+              }
+              done={pp.done}
+              total={pp.total}
+              right={`weeks ${pr.weeks[0]}–${pr.weeks[1]} · ${pp.done}/${pp.total}`}
+              valueText={`${pp.done} of ${pp.total} milestones`}
+            />
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function AchievementsNextCard({ data }: { data: AppData }) {
+  const list = achievements(data);
+  const next = nextUp(list, 3);
+  return (
+    <div className="card">
+      <div className="card-head">
+        <h2>
+          {TERMS.achievements} · {unlockedCount(list)}/{list.length}
+        </h2>
+        <MoreLink to="/milestones">All achievements</MoreLink>
+      </div>
+      {next.length === 0 ? (
+        <EmptyState>Tick a task or log a session to start earning achievements.</EmptyState>
+      ) : (
         <div className="stack">
-          {PHASES.map((ph) => {
-            const pp = phaseProgress(data, ph.id);
+          {next.map((a) => (
+            <ProgressLine
+              key={a.id}
+              title={
+                <span>
+                  <strong>{a.title}</strong> <span className="ink-3 small">· {a.description}</span>
+                </span>
+              }
+              done={Math.round(a.progress * 100)}
+              total={100}
+              right={a.detail}
+              valueText={a.detail}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ComingUpCard({ data, cw }: { data: AppData; cw: number }) {
+  return (
+    <div className="card">
+      <div className="card-head">
+        <h2>Coming up</h2>
+      </div>
+      <div className="stack">
+        {[cw + 1, cw + 2]
+          .filter((w) => w <= TOTAL_WEEKS)
+          .map((w) => {
+            const wp = weekProgress(data, w);
             return (
-              <ProgressLine
-                key={ph.id}
-                title={
-                  <span>
-                    <strong>Phase {ph.id}</strong> · {ph.title} <span className="faint small">(weeks {ph.weeks[0]}–{ph.weeks[1]})</span>
-                  </span>
-                }
-                done={pp.done}
-                total={pp.total}
-                right={`${pp.weeksDone}/${pp.weeks} weeks · ${pct(pp.done, pp.total)}%`}
-              />
+              <div key={w} className="row between">
+                <span>
+                  <WeekLink week={w}>
+                    <strong>Week {w}</strong>
+                  </WeekLink>{' '}
+                  · <Vi>{weekDef(w).topic}</Vi>
+                </span>
+                <span className="small ink-3">
+                  {fmtRange(weekRange(data, w))} · {wp.done}/{wp.total}
+                </span>
+              </div>
             );
           })}
-        </div>
       </div>
-
-      <div className="grid-2" style={{ marginTop: 14 }}>
-        <div className="card">
-          <div className="card-head">
-            <h2>{cw ? `This week · Week ${cw}` : 'Next up · Week 1'}</h2>
-            <span className="row">
-              <StatusPill status={weekStatus(data, cw ?? 1)} />
-              <WeekLink week={cw ?? 1}>
-                <span className="small">Open →</span>
-              </WeekLink>
-            </span>
-          </div>
-          <div className="small muted" style={{ marginBottom: 8 }}>
-            {weekDef(cw ?? 1).topic}
-          </div>
-          <ul className="checklist">
-            {taskItems(data, cw ?? 1).map((it) => {
-              const done = isDone(data, it.key);
-              return (
-                <li key={it.key} className={done ? 'done' : ''}>
-                  <label>
-                    <input type="checkbox" checked={done} onChange={(e) => setTask(it.key, e.target.checked)} />
-                    <span>
-                      {it.kind === 'dsa' && <span className="kind-tag">DSA</span>}
-                      {it.kind === 'custom' && <span className="kind-tag">Mine</span>}
-                      {it.label}
-                    </span>
-                  </label>
-                </li>
-              );
-            })}
-          </ul>
-          <div className="small faint" style={{ marginTop: 8 }}>
-            {(() => {
-              const wp = weekProgress(data, cw ?? 1);
-              return `${wp.done} of ${wp.total} done`;
-            })()}
-          </div>
-        </div>
-
-        <div className="card">
-          <div className="card-head">
-            <h2>Follow-ups</h2>
-            <Link to="/followups" className="small">
-              All follow-ups →
-            </Link>
-          </div>
-          {reviewsDue > 0 && (
-            <div className="row" style={{ marginBottom: 10 }}>
-              <span className="pill accent">
-                <RefreshCw size={12} /> {plural(reviewsDue, 'DSA problem')} due for review
-              </span>
-              <Link to="/dsa" className="small">
-                Review →
-              </Link>
-            </div>
-          )}
-          {dueSoon.length === 0 ? (
-            <EmptyState>No open follow-ups. Add questions, blockers, or things to revisit.</EmptyState>
-          ) : (
-            <ul className="list">
-              {dueSoon.map((f) => (
-                <li key={f.id}>
-                  <div className="body">
-                    <div className="title">{f.title}</div>
-                    <div className="meta">
-                      {f.due && (
-                        <span className={isOverdue(f) ? 'pill overdue' : ''}>
-                          {isOverdue(f) ? (
-                            <>
-                              <AlertTriangle size={12} /> overdue ·{' '}
-                            </>
-                          ) : (
-                            'due '
-                          )}
-                          {relDay(f.due)}
-                        </span>
-                      )}
-                      {f.priority === 'high' && <span className="pill warning">High</span>}
-                      {f.week && <WeekLink week={f.week} />}
-                    </div>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
+      <div className="section-sm">
+        <ProgressBar done={cw} total={TOTAL_WEEKS} thin label="Weeks elapsed" valueText={`${cw} of ${TOTAL_WEEKS} weeks`} />
       </div>
-
-      <div className="card" style={{ marginTop: 14 }}>
-        <div className="card-head">
-          <h2>Activity · last 26 weeks</h2>
-          <span className="small muted">Logged time, ticked tasks, closed follow-ups, solved problems</span>
-        </div>
-        <ActivityHeatmap minutesByDay={minutesByDay(data)} activeDays={activeDays(data)} />
-      </div>
-
-      <div className="grid-2" style={{ marginTop: 14 }}>
-        <div className="card">
-          <div className="card-head">
-            <h2>Study hours · last 12 weeks</h2>
-            <Link to="/log" className="small">
-              Study log →
-            </Link>
-          </div>
-          {data.logs.length === 0 ? (
-            <EmptyState>No sessions logged yet. Log time from the study log or any week page.</EmptyState>
-          ) : (
-            <WeeklyHoursChart buckets={buckets} targetMinutes={targetMin} />
-          )}
-        </div>
-
-        <div className="card">
-          <div className="card-head">
-            <h2>Side projects</h2>
-            <Link to="/projects" className="small">
-              Details →
-            </Link>
-          </div>
-          <div className="stack">
-            {PROJECTS.map((pr) => {
-              const st = projectState(data, pr.id);
-              const pp = projectProgress(data, pr.id);
-              return (
-                <ProgressLine
-                  key={pr.id}
-                  title={
-                    <span>
-                      <strong>{pr.number}.</strong> {pr.title}{' '}
-                      <span className={`pill ${st.status === 'done' ? 'done' : st.status === 'in-progress' ? 'in-progress' : ''}`}>
-                        {PROJECT_STATUS_LABEL[st.status]}
-                      </span>
-                    </span>
-                  }
-                  done={pp.done}
-                  total={pp.total}
-                  right={`weeks ${pr.weeks[0]}–${pr.weeks[1]} · ${pp.done}/${pp.total}`}
-                />
-              );
-            })}
-          </div>
-        </div>
-      </div>
-
-      <div className="card" style={{ marginTop: 14 }}>
-        <div className="card-head">
-          <h2>
-            Milestones · {unlockedCount(badges)}/{badges.length}
-          </h2>
-          <Link to="/milestones" className="small">
-            All milestones →
-          </Link>
-        </div>
-        {badgesNext.length === 0 ? (
-          <EmptyState>Tick a task or log a session to start earning milestones.</EmptyState>
-        ) : (
-          <div className="stack">
-            {badgesNext.map((a) => (
-              <ProgressLine
-                key={a.id}
-                title={
-                  <span>
-                    <strong>{a.title}</strong> <span className="faint small">· {a.description}</span>
-                  </span>
-                }
-                done={Math.round(a.progress * 100)}
-                total={100}
-                right={a.detail}
-              />
-            ))}
-          </div>
-        )}
-      </div>
-
-      {status === 'active' && cw && cw < TOTAL_WEEKS && (
-        <div className="card" style={{ marginTop: 14 }}>
-          <div className="card-head">
-            <h2>Coming up</h2>
-          </div>
-          <div className="stack">
-            {[cw + 1, cw + 2].filter((w) => w <= TOTAL_WEEKS).map((w) => {
-              const r = weekRange(data, w)!;
-              const wp = weekProgress(data, w);
-              return (
-                <div key={w} className="row between">
-                  <span>
-                    <WeekLink week={w}>
-                      <strong>Week {w}</strong>
-                    </WeekLink>{' '}
-                    · {weekDef(w).topic}
-                  </span>
-                  <span className="small faint nowrap">
-                    {fmtDate(r.start)} – {fmtDate(r.end)} · {wp.done}/{wp.total}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-          <div style={{ marginTop: 10 }}>
-            <ProgressBar done={cw} total={TOTAL_WEEKS} thin label="Weeks elapsed" />
-          </div>
-        </div>
-      )}
-    </>
+    </div>
   );
 }

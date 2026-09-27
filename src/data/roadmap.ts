@@ -47,9 +47,6 @@ export interface ProjectDef {
 
 export const TOTAL_WEEKS = 36;
 
-export const GOAL =
-  'Chuyển dịch từ Middle Frontend lên Senior Fullstack/Software Engineer trong 36 tuần (9 tháng) với trọng tâm là Hệ thống phân tán, AWS, và Backend Golang (Boot.dev + Alex Edwards).';
-
 export const PHASES: Phase[] = [
   { id: 1, title: 'Senior Frontend Mastery & Performance', focus: 'React Internals, Web Vitals, Headless UI & Next.js App Router.', weeks: [1, 10] },
   { id: 2, title: 'Golang Backend Core', focus: "Boot.dev track Go, PostgreSQL Deep Dive, Transactions & Let's Go / Let's Go Further.", weeks: [11, 20] },
@@ -251,4 +248,3 @@ export const weekDef = (n: number): WeekDef => WEEKS[n - 1];
 export const phaseOfWeek = (n: number): Phase => PHASES.find((p) => n >= p.weeks[0] && n <= p.weeks[1]) ?? PHASES[0];
 export const phaseById = (id: number): Phase => PHASES.find((p) => p.id === id) ?? PHASES[0];
 export const projectById = (id: ProjectId): ProjectDef => PROJECTS.find((p) => p.id === id) ?? PROJECTS[0];
-export const resourceById = (id: string): ResourceDef | undefined => RESOURCES.find((r) => r.id === id);

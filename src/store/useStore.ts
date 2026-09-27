@@ -1,7 +1,9 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { PROJECTS, type ProjectId } from '@/data/roadmap';
-import { addDays, isValidISODate, today, uid } from '@/lib/date';
+import { addDays, isValidISODate, today } from '@/lib/date';
+import { uid } from '@/lib/format';
+import { customKey, milestoneIndex } from '@/lib/keys';
 
 /* ---------- Persisted data types ---------- */
 
@@ -38,7 +40,7 @@ export interface FollowUp {
   doneAt?: string;
 }
 
-export type ResourceStatus = 'todo' | 'in-progress' | 'done';
+export type ResourceStatus = 'not-started' | 'in-progress' | 'done';
 export interface ResourceMark {
   status: ResourceStatus;
   progress: number; // 0-100
@@ -110,7 +112,7 @@ export interface AppData {
 }
 
 export const STORAGE_KEY = 'swe-tracking:v1';
-export const DATA_VERSION = 1;
+export const DATA_VERSION = 2; // v2: resource status 'todo' became 'not-started'
 
 export const defaultData = (): AppData => ({
   version: DATA_VERSION,
@@ -135,6 +137,18 @@ export const pickData = (s: AppData): AppData => {
   const out: Record<string, unknown> = {};
   for (const k of DATA_KEYS) out[k] = s[k];
   return out as unknown as AppData;
+};
+
+/* Brings any older document (persisted, imported, or from the cloud) up to the current shape. */
+export const migrateData = (input: Partial<AppData>): AppData => {
+  const d: AppData = { ...defaultData(), ...input, version: DATA_VERSION };
+  const resources: AppData['resources'] = {};
+  for (const [id, r] of Object.entries(d.resources ?? {})) {
+    const status = (r.status as string | undefined) === 'todo' ? 'not-started' : r.status;
+    resources[id] = { ...r, status };
+  }
+  d.resources = resources;
+  return d;
 };
 
 /* Loose validation of an imported document. Returns an error message or null. */
@@ -261,7 +275,7 @@ export const useStore = create<StoreState>()(
         deleteCustomTask: (week, id) =>
           set((s) => {
             const tasks = { ...s.tasks };
-            delete tasks[`w${week}-c${id}`];
+            delete tasks[customKey(week, id)];
             const list = (s.customTasks[String(week)] ?? []).filter((t) => t.id !== id);
             const customTasks = { ...s.customTasks };
             if (list.length) customTasks[String(week)] = list;
@@ -334,8 +348,7 @@ export const useStore = create<StoreState>()(
             } else {
               // Default milestone from the roadmap, first time it is touched.
               const def = PROJECTS.find((p) => p.id === projectId);
-              const i = Number(milestoneId.split('-m')[1]);
-              const title = def?.milestones[i] ?? milestoneId;
+              const title = def?.milestones[milestoneIndex(projectId, milestoneId)] ?? milestoneId;
               list.push({ id: milestoneId, title, done: true, custom: false });
             }
             return { projects: { ...s.projects, [projectId]: { ...saved, milestones: list } } };
@@ -355,17 +368,17 @@ export const useStore = create<StoreState>()(
             return { projects: { ...s.projects, [projectId]: { ...saved, milestones: list } } };
           }),
 
-        importData: (data) => set({ ...pickData({ ...defaultData(), ...data }), version: DATA_VERSION }),
+        importData: (data) => set(pickData(migrateData(data))),
         resetData: () => set(defaultData()),
 
-        applyRemote: (data, updatedAt) => rawSet({ ...pickData({ ...defaultData(), ...data }), version: DATA_VERSION, updatedAt }),
+        applyRemote: (data, updatedAt) => rawSet({ ...pickData(migrateData(data)), updatedAt }),
       };
     },
     {
       name: STORAGE_KEY,
       version: DATA_VERSION,
       partialize: (s) => pickData(s),
-      migrate: (persisted) => ({ ...defaultData(), ...(persisted as Partial<AppData>), version: DATA_VERSION }),
+      migrate: (persisted) => migrateData(persisted as Partial<AppData>),
     },
   ),
 );

@@ -1,16 +1,18 @@
 import { useState, type FormEvent } from 'react';
 import { isCloudConfigured } from '@/lib/supabase';
 import { signInWithMagicLink, signInWithPassword, signOut, signUpWithPassword, syncNow, useSync, type SyncStatus } from '@/store/sync';
+import { fmtDateTime } from '@/lib/date';
+import { fmtKB } from '@/lib/format';
 import { toast } from '@/components/ui';
 import { AlertTriangle, Cloud, CloudOff, RefreshCw } from '@/components/icons';
 
-export const SYNC_LABEL: Record<SyncStatus, string> = {
-  disabled: 'Local only',
+const SYNC_LABEL: Record<SyncStatus, string> = {
+  disabled: 'Saved on this device',
   'signed-out': 'Not signed in',
-  syncing: 'Syncing…',
+  syncing: 'Saving…',
   synced: 'Synced',
   offline: 'Offline',
-  error: 'Sync error',
+  error: 'Sync problem',
 };
 
 const SYNC_ICON = {
@@ -22,16 +24,16 @@ const SYNC_ICON = {
   error: AlertTriangle,
 } as const;
 
-const fmtKB = (bytes: number) => (bytes < 1024 ? `${bytes} B` : `${(bytes / 1024).toFixed(1)} KB`);
-
-/* Compact indicator for the sidebar. */
-export function SyncIndicator() {
-  const { status, pending } = useSync();
+/* Compact indicator for the sidebar and the phone sheet. Only one instance should announce. */
+export function SyncIndicator({ announce }: { announce?: boolean }) {
+  const status = useSync((s) => s.status);
+  const pending = useSync((s) => s.pending);
   const cls = status === 'synced' ? 'good' : status === 'error' ? 'critical' : status === 'syncing' || pending ? 'accent' : '';
   const Icon = pending && status !== 'syncing' ? RefreshCw : SYNC_ICON[status];
+  const text = pending && status !== 'syncing' ? 'Saving…' : SYNC_LABEL[status];
   return (
-    <span className={`pill ${cls}`} title={SYNC_LABEL[status]}>
-      <Icon size={13} /> {pending && status !== 'syncing' ? 'Pending…' : SYNC_LABEL[status]}
+    <span className={`pill ${cls}`} role={announce ? 'status' : undefined} aria-live={announce ? 'polite' : undefined}>
+      <Icon size={13} /> {text}
     </span>
   );
 }
@@ -43,18 +45,21 @@ export function CloudSyncCard() {
   const [password, setPassword] = useState('');
   const [mode, setMode] = useState<'sign-in' | 'sign-up'>('sign-in');
   const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
+  const [message, setMessage] = useState<{ text: string; kind: 'info' | 'error' } | null>(null);
+  const [showDetails, setShowDetails] = useState(false);
 
   if (!isCloudConfigured) {
     return (
       <div className="card">
         <div className="card-head">
           <h2>Cloud sync</h2>
-          <span className="pill">Local only</span>
+          <span className="pill">
+            <CloudOff size={13} /> Off
+          </span>
         </div>
-        <p className="muted small">
-          Sync across devices by connecting a Supabase project. Create one at supabase.com, run <span className="mono">supabase/schema.sql</span> in its SQL editor,
-          then copy <span className="mono">.env.example</span> to <span className="mono">.env.local</span> with the project URL and anon key and restart the dev server.
+        <p className="ink-2 small">
+          Cloud sync isn't set up for this copy of the app, so your data stays in this browser. Use "Download backup" below to move it to another device. (Developers:
+          the README explains how to connect Supabase.)
         </p>
       </div>
     );
@@ -66,21 +71,22 @@ export function CloudSyncCard() {
     setMessage(null);
     const err = mode === 'sign-in' ? await signInWithPassword(email, password) : await signUpWithPassword(email, password);
     setBusy(false);
-    if (err) setMessage(err);
+    if (err) setMessage({ text: err, kind: mode === 'sign-up' && err.startsWith('Check your email') ? 'info' : 'error' });
     else {
       setPassword('');
-      toast(mode === 'sign-in' ? 'Signed in' : 'Account created');
+      toast(mode === 'sign-in' ? 'Signed in. Syncing your data.' : 'Account created. Syncing your data.');
     }
   };
 
   const magic = async () => {
     if (!email) {
-      setMessage('Enter your email first.');
+      setMessage({ text: 'Enter your email first.', kind: 'error' });
       return;
     }
     setBusy(true);
-    setMessage(await signInWithMagicLink(email));
+    const res = await signInWithMagicLink(email);
     setBusy(false);
+    setMessage(res ? { text: res, kind: res.startsWith('Magic link sent') ? 'info' : 'error' } : null);
   };
 
   if (!user) {
@@ -88,10 +94,12 @@ export function CloudSyncCard() {
       <div className="card">
         <div className="card-head">
           <h2>Cloud sync</h2>
-          <span className="pill">{SYNC_LABEL[status]}</span>
+          <span className="pill">
+            <CloudOff size={13} /> {SYNC_LABEL[status]}
+          </span>
         </div>
-        <p className="muted small">Sign in to keep this tracker in sync across your devices. Your local data is uploaded on first sign-in.</p>
-        <form onSubmit={submit} className="form-grid" style={{ marginTop: 12 }}>
+        <p className="ink-2 small">Sign in to keep this tracker in sync across your devices. What you have here is uploaded the first time you sign in.</p>
+        <form onSubmit={submit} className="form-grid section">
           <div className="field">
             <label htmlFor="auth-email">Email</label>
             <input id="auth-email" type="email" className="input" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" required />
@@ -105,17 +113,21 @@ export function CloudSyncCard() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               autoComplete={mode === 'sign-in' ? 'current-password' : 'new-password'}
+              aria-describedby="auth-password-hint"
               minLength={6}
               required
             />
+            <span id="auth-password-hint" className="hint">
+              At least 6 characters
+            </span>
           </div>
-          <div className="form-actions wide" style={{ marginTop: 0, justifyContent: 'space-between' }}>
+          <div className="form-actions wide between">
             <div className="row">
               <button type="button" className="btn ghost sm" onClick={() => setMode(mode === 'sign-in' ? 'sign-up' : 'sign-in')}>
                 {mode === 'sign-in' ? 'Need an account? Sign up' : 'Have an account? Sign in'}
               </button>
               <button type="button" className="btn ghost sm" onClick={magic} disabled={busy}>
-                Email me a magic link
+                Email me a sign-in link
               </button>
             </div>
             <button className="btn primary" type="submit" disabled={busy}>
@@ -124,8 +136,8 @@ export function CloudSyncCard() {
           </div>
         </form>
         {message && (
-          <p className="small" style={{ marginTop: 8 }}>
-            {message}
+          <p className={`small section-sm${message.kind === 'error' ? ' error' : ''}`} role={message.kind === 'error' ? 'alert' : 'status'}>
+            {message.text}
           </p>
         )}
       </div>
@@ -142,43 +154,47 @@ export function CloudSyncCard() {
         <dt>Signed in as</dt>
         <dd>{user.email ?? user.id}</dd>
         <dt>Last synced</dt>
-        <dd>{lastSyncedAt ? new Date(lastSyncedAt).toLocaleString() : '—'}</dd>
-        <dt>Local changes</dt>
-        <dd>{pending ? 'waiting to upload' : 'all uploaded'}</dd>
+        <dd>{lastSyncedAt ? fmtDateTime(lastSyncedAt) : '—'}</dd>
+        <dt>Changes</dt>
+        <dd>{pending ? 'saving…' : 'all saved'}</dd>
         <dt>Live updates</dt>
         <dd>{live ? 'connected' : 'reconnecting…'}</dd>
-        <dt>Requests this session</dt>
-        <dd className="tabular">
-          {stats.pulls} pulls ({stats.pullsWithData} with data) · {stats.pushes} pushes · {stats.realtimeApplied} live
-          <span className="faint">
-            {' '}
-            · skipped {stats.skippedPulls + stats.skippedPushes} · {fmtKB(stats.bytesUp)} up / {fmtKB(stats.bytesDown)} down
-          </span>
-        </dd>
       </dl>
       {error && (
-        <p className="error" style={{ marginTop: 8 }}>
+        <p className="error section-sm" role="alert">
           {error}
         </p>
       )}
-      <p className="hint" style={{ marginTop: 10 }}>
-        The newest change wins when two devices edit while offline. Changes made here appear on other signed-in devices within a second or two. Pulls only
-        transfer data when the cloud copy is newer; unchanged content is never re-uploaded.
-      </p>
-      <div className="row" style={{ marginTop: 12 }}>
-        <button className="btn" onClick={() => void syncNow()} disabled={status === 'syncing'}>
+      <p className="hint section-sm">Changes sync within seconds. If two devices edit while offline, the most recent change wins.</p>
+      <div className="row section-sm">
+        <button className="btn" onClick={() => void syncNow('manual')} disabled={status === 'syncing'}>
           Sync now
         </button>
         <button
           className="btn ghost"
           onClick={async () => {
             await signOut();
-            toast('Signed out. Local data stays on this device.');
+            toast('Signed out. Your data stays on this device.');
           }}
         >
           Sign out
         </button>
+        <button className="btn ghost sm push-end" onClick={() => setShowDetails((v) => !v)} aria-expanded={showDetails}>
+          {showDetails ? 'Hide details' : 'Details'}
+        </button>
       </div>
+      {showDetails && (
+        <dl className="kv small ink-2 section-sm">
+          <dt>Requests this session</dt>
+          <dd className="tabular">
+            {stats.pulls} pulls ({stats.pullsWithData} with data) · {stats.pushes} uploads · {stats.realtimeApplied} live updates · {stats.skippedPulls + stats.skippedPushes} skipped
+          </dd>
+          <dt>Transferred</dt>
+          <dd className="tabular">
+            {fmtKB(stats.bytesUp)} up · {fmtKB(stats.bytesDown)} down
+          </dd>
+        </dl>
+      )}
     </div>
   );
 }

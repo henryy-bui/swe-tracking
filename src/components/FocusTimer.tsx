@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { beep, POMODORO_MINUTES, useTimer } from '@/store/timer';
-import { LOG_TAGS, useStore, type LogTag } from '@/store/useStore';
-import { currentWeek } from '@/lib/derive';
-import { fmtHours, today } from '@/lib/date';
+import { type LogTag } from '@/store/useStore';
+import { logSession, stopTimer, stopTimerAndLog } from '@/lib/session';
 import { toast } from '@/components/ui';
+import { LogTagSelect } from '@/components/fields';
 import { Play, Square } from '@/components/icons';
 
 const fmtClock = (ms: number) => {
@@ -28,10 +28,10 @@ const useElapsed = (startedAt: number | null) => {
   return startedAt ? now - startedAt : 0;
 };
 
-const MESSAGE = `${POMODORO_MINUTES} minutes of focus. Take a break or keep going.`;
+const MESSAGE = `${POMODORO_MINUTES} minutes of focus done. Take a break or keep going.`;
 
 /* Ask once for permission to notify when the tab is in the background. */
-export const requestNotifyPermission = () => {
+const requestNotifyPermission = () => {
   if (typeof Notification === 'undefined' || Notification.permission !== 'default') return;
   void Notification.requestPermission();
 };
@@ -58,87 +58,75 @@ const usePomodoroAlert = (elapsed: number) => {
 };
 
 interface Props {
-  /* Top-bar chip: start/stop only; stopping logs straight away as "study". */
+  /* Top-bar chip: start/stop only; stopping logs straight away as Study. */
   compact?: boolean;
 }
 
 export function FocusTimer({ compact }: Props) {
-  const { startedAt, pomodoro, start, stop, setPomodoro } = useTimer();
-  const addLog = useStore((s) => s.addLog);
-  const data = useStore();
+  const id = useId();
+  const startedAt = useTimer((s) => s.startedAt);
+  const pomodoro = useTimer((s) => s.pomodoro);
+  const start = useTimer((s) => s.start);
+  const setPomodoro = useTimer((s) => s.setPomodoro);
   const [draft, setDraft] = useState<{ minutes: number; tag: LogTag; note: string } | null>(null);
   const elapsed = useElapsed(startedAt);
   const reached = usePomodoroAlert(elapsed);
-
-  const logSession = (minutes: number, tag: LogTag, note: string) => {
-    addLog({ date: today(), minutes, week: currentWeek(data) ?? undefined, tag, note: note.trim() });
-    toast(`Logged ${fmtHours(minutes)}`);
-  };
-
-  const onStop = () => {
-    const minutes = stop();
-    if (minutes < 1) {
-      toast('Session under a minute, not logged.');
-      return;
-    }
-    if (compact) logSession(minutes, 'study', '');
-    else setDraft({ minutes, tag: 'study', note: '' });
-  };
 
   if (compact) {
     return startedAt ? (
       <span className={`timer-chip${reached ? ' reached' : ''}`}>
         <span className="timer-clock" aria-live="off">
           {fmtClock(elapsed)}
+          {reached && <span className="sr-only"> – Pomodoro done</span>}
         </span>
-        <button className="btn sm" onClick={onStop} aria-label="Stop timer and log session">
-          <Square size={12} filled /> Stop
+        <button className="btn sm" onClick={() => stopTimerAndLog()} aria-label="Stop timer and log the session">
+          <Square size={12} filled /> Stop &amp; log
         </button>
       </span>
     ) : (
       <button className="btn sm ghost" onClick={start} aria-label="Start focus timer">
-        <Play size={13} filled /> Focus
+        <Play size={13} filled /> Start timer
       </button>
     );
   }
 
+  const onStop = () => {
+    const minutes = stopTimer();
+    if (minutes !== null) setDraft({ minutes, tag: 'study', note: '' });
+  };
+
+  const save = () => {
+    if (!draft) return;
+    logSession(draft.minutes, draft.tag, draft.note);
+    setDraft(null);
+  };
+
   if (draft) {
     return (
-      <div className="timer-widget">
+      <div className="timer-widget" role="group" aria-label="Log the finished session">
         <div className="timer-label">Log {draft.minutes} min as</div>
-        <select value={draft.tag} onChange={(e) => setDraft({ ...draft, tag: e.target.value as LogTag })} aria-label="Session type">
-          {LOG_TAGS.map((t) => (
-            <option key={t} value={t}>
-              {t}
-            </option>
-          ))}
-        </select>
+        <LogTagSelect value={draft.tag} onChange={(v) => setDraft({ ...draft, tag: v as LogTag })} aria-label="Session type" />
         <input
           type="text"
           className="input"
           placeholder="Note (optional)"
           value={draft.note}
           onChange={(e) => setDraft({ ...draft, note: e.target.value })}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              logSession(draft.minutes, draft.tag, draft.note);
-              setDraft(null);
-            }
-          }}
+          onKeyDown={(e) => e.key === 'Enter' && save()}
           aria-label="Session note"
         />
         <div className="row">
+          <button className="btn primary sm" onClick={save}>
+            Log session
+          </button>
           <button
-            className="btn primary sm"
+            className="btn ghost sm"
             onClick={() => {
-              logSession(draft.minutes, draft.tag, draft.note);
               setDraft(null);
+              toast(`${draft.minutes} min not logged.`);
             }}
           >
-            Log
-          </button>
-          <button className="btn ghost sm" onClick={() => setDraft(null)}>
-            Discard
+            Don't log
           </button>
         </div>
       </div>
@@ -146,20 +134,20 @@ export function FocusTimer({ compact }: Props) {
   }
 
   return (
-    <div className={`timer-widget${startedAt ? ' running' : ''}${reached ? ' reached' : ''}`}>
+    <div className={`timer-widget${startedAt ? ' running' : ''}${reached ? ' reached' : ''}`} role="group" aria-label="Focus timer">
       <div className="row between">
         <span className="timer-label">{startedAt ? (reached ? 'Pomodoro done' : 'Focusing') : 'Focus timer'}</span>
-        <label className="small muted row" style={{ gap: 4 }}>
+        <label className="small ink-2 row timer-option" htmlFor={`${id}-pomo`}>
           <input
+            id={`${id}-pomo`}
             type="checkbox"
             checked={pomodoro}
             onChange={(e) => {
               setPomodoro(e.target.checked);
               if (e.target.checked) requestNotifyPermission();
             }}
-            style={{ width: 14, height: 14 }}
           />
-          25m
+          25-min alert
         </label>
       </div>
       <div className="timer-clock tabular" aria-live="off">

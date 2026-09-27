@@ -1,99 +1,35 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useId, useState, type FormEvent } from 'react';
 import { Link, Navigate, useParams } from 'react-router-dom';
-import { LOG_TAGS, useStore, type LogTag, type Priority } from '@/store/useStore';
+import { useStore, type AppData } from '@/store/useStore';
 import { TOTAL_WEEKS, phaseOfWeek, projectById, weekDef } from '@/data/roadmap';
-import { currentWeek, isDone, isOverdue, minutesForRoadmapWeek, sortFollowUps, taskItems, weekProgress, weekRange, weekStatus } from '@/lib/derive';
-import { fmtDate, fmtHours, relDay, today } from '@/lib/date';
-import { EmptyState, PageHead, ProgressBar, StatusPill, toast } from '@/components/ui';
-import { AlertTriangle, ChevronLeft, ChevronRight, Copy, Download, Star, X } from '@/components/icons';
+import { currentWeek, sessionsForWeek, sortFollowUps, taskItems, weekProgress, weekRange, weekStatus } from '@/lib/derive';
+import { fmtDate, fmtRange } from '@/lib/date';
+import { fmtHours, plural } from '@/lib/format';
+import { RATING_LABEL, TERMS } from '@/lib/labels';
+import { useDraft } from '@/lib/useDraft';
+import { rovingKey } from '@/lib/useA11y';
+import { downloadText } from '@/lib/download';
 import { weekSummaryMarkdown } from '@/lib/report';
-import { downloadText } from '@/lib/date';
+import { EmptyState, MilestoneBadge, MoreLink, PageHead, ProgressBar, Stars, StatusPill, toast } from '@/components/ui';
+import { TaskChecklist } from '@/components/TaskChecklist';
+import { LogSessionForm } from '@/components/LogSessionForm';
+import { FollowUpForm } from '@/components/FollowUpForm';
+import { FollowUpRow } from '@/components/FollowUpRow';
+import { SessionRow } from '@/components/SessionRow';
+import { ChevronLeft, ChevronRight, Copy, Download, Star } from '@/components/icons';
 
 export default function WeekDetail() {
   const { n } = useParams();
   const week = Number(n);
   if (!Number.isInteger(week) || week < 1 || week > TOTAL_WEEKS) return <Navigate to="/weeks" replace />;
-  return <WeekBody week={week} />;
+  return <WeekBody key={week} week={week} />;
 }
 
 function WeekBody({ week }: { week: number }) {
   const data = useStore();
-  const { setTask, setWeekTasks, setWeekNote, toggleSkipWeek, addLog, addFollowUp, toggleFollowUp, deleteFollowUp, addCustomTask, deleteCustomTask, setRetro } =
-    useStore();
-
   const def = weekDef(week);
   const phase = phaseOfWeek(week);
-  const items = taskItems(data, week);
-  const wp = weekProgress(data, week);
-  const st = weekStatus(data, week);
-  const range = weekRange(data, week);
   const cw = currentWeek(data);
-  const minutes = minutesForRoadmapWeek(data, week);
-  const followUps = sortFollowUps(data.followUps.filter((f) => f.week === week));
-
-  const [note, setNote] = useState(data.weekNotes[String(week)] ?? '');
-  useEffect(() => setNote(data.weekNotes[String(week)] ?? ''), [week, data.weekNotes]);
-
-  const [logDate, setLogDate] = useState(today());
-  const [logHours, setLogHours] = useState('1');
-  const [logTag, setLogTag] = useState<LogTag>('study');
-  const [logNote, setLogNote] = useState('');
-
-  const [fuTitle, setFuTitle] = useState('');
-  const [fuDue, setFuDue] = useState('');
-  const [fuPriority, setFuPriority] = useState<Priority>('medium');
-
-  const [newTask, setNewTask] = useState('');
-  const retro = data.retros?.[String(week)];
-  const [wentWell, setWentWell] = useState(retro?.wentWell ?? '');
-  const [improve, setImprove] = useState(retro?.improve ?? '');
-  useEffect(() => {
-    setWentWell(retro?.wentWell ?? '');
-    setImprove(retro?.improve ?? '');
-  }, [week, retro?.wentWell, retro?.improve]);
-
-  const submitTask = (e: FormEvent) => {
-    e.preventDefault();
-    if (!newTask.trim()) return;
-    addCustomTask(week, newTask.trim());
-    setNewTask('');
-  };
-
-  const submitLog = (e: FormEvent) => {
-    e.preventDefault();
-    const mins = Math.round(Number(logHours) * 60);
-    if (!logDate || !mins || mins <= 0) return;
-    addLog({ date: logDate, minutes: mins, week, tag: logTag, note: logNote.trim() });
-    setLogNote('');
-    toast(`Logged ${fmtHours(mins)} to week ${week}`);
-  };
-
-  const submitFollowUp = (e: FormEvent) => {
-    e.preventDefault();
-    if (!fuTitle.trim()) return;
-    addFollowUp({ title: fuTitle.trim(), note: '', due: fuDue || undefined, week, priority: fuPriority });
-    setFuTitle('');
-    setFuDue('');
-    toast('Follow-up added');
-  };
-
-  const saveNote = () => {
-    if ((data.weekNotes[String(week)] ?? '') !== note) {
-      setWeekNote(week, note);
-      toast('Notes saved');
-    }
-  };
-
-  const copySummary = async () => {
-    const md = weekSummaryMarkdown(data, week);
-    try {
-      await navigator.clipboard.writeText(md);
-      toast('Week summary copied as Markdown');
-    } catch {
-      downloadText(`week-${week}-summary.md`, md, 'text/markdown');
-      toast('Clipboard unavailable, downloaded instead');
-    }
-  };
 
   return (
     <>
@@ -102,342 +38,339 @@ function WeekBody({ week }: { week: number }) {
         subtitle={
           <>
             Phase {phase.id} · {phase.title}
-            {range && ` · ${fmtDate(range.start)} – ${fmtDate(range.end)}`}
-            {cw === week && ' · current week'}
+            {data.startDate && ` · ${fmtRange(weekRange(data, week))}`}
+            {cw === week && ' · this week'}
           </>
         }
       >
-        <div className="week-nav">
-          <Link to="/weeks" className="btn ghost">
-            All weeks
-          </Link>
-          {week > 1 ? (
-            <Link to={`/weeks/${week - 1}`} className="btn">
-              <ChevronLeft size={16} /> Week {week - 1}
-            </Link>
-          ) : (
-            <button className="btn" disabled>
-              <ChevronLeft size={16} /> Week 0
-            </button>
-          )}
-          {week < TOTAL_WEEKS ? (
-            <Link to={`/weeks/${week + 1}`} className="btn">
-              Week {week + 1} <ChevronRight size={16} />
-            </Link>
-          ) : (
-            <button className="btn" disabled>
-              Week 37 <ChevronRight size={16} />
-            </button>
-          )}
-        </div>
+        <WeekNav week={week} />
       </PageHead>
 
       <div className="grid-2">
         <div className="stack">
-          <div className="card">
-            <div className="card-head">
-              <h2>Checklist</h2>
-              <span className="row">
-                <StatusPill status={st} />
-                <span className="small muted tabular">
-                  {wp.done}/{wp.total}
-                </span>
-              </span>
-            </div>
-            <ProgressBar done={wp.done} total={wp.total} label={`${wp.done} of ${wp.total} done`} />
-            {def.milestone && (
-              <div style={{ marginTop: 10 }}>
-                <span className="milestone-badge">
-                  {def.milestone.kind === 'start' ? 'Start' : 'Finish'} side project {projectById(def.milestone.project).number}
-                </span>{' '}
-                <Link to="/projects" className="small">
-                  {projectById(def.milestone.project).title} →
-                </Link>
-              </div>
-            )}
-            <ul className="checklist" style={{ marginTop: 10 }}>
-              {items.map((it) => {
-                const mark = data.tasks[it.key];
-                const done = isDone(data, it.key);
-                return (
-                  <li key={it.key} className={done ? 'done' : ''}>
-                    <label>
-                      <input type="checkbox" checked={done} onChange={(e) => setTask(it.key, e.target.checked)} />
-                      <span>
-                        {it.kind === 'dsa' && <span className="kind-tag">DSA</span>}
-                        {it.kind === 'custom' && <span className="kind-tag">Mine</span>}
-                        {it.label}
-                      </span>
-                    </label>
-                    {done && mark?.at && <span className="meta">{fmtDate(mark.at)}</span>}
-                    {it.kind === 'custom' && it.customId && (
-                      <button className="btn sm ghost icon" onClick={() => deleteCustomTask(week, it.customId!)} aria-label={`Delete task "${it.label}"`}>
-                        <X size={14} />
-                      </button>
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
-            <form className="inline-add" onSubmit={submitTask}>
-              <input type="text" className="input" value={newTask} onChange={(e) => setNewTask(e.target.value)} placeholder="Add your own task for this week…" aria-label="New task" />
-              <button className="btn" type="submit">
-                Add
-              </button>
-            </form>
-            <div className="row" style={{ marginTop: 12 }}>
-              {wp.done < wp.total ? (
-                <button className="btn sm" onClick={() => setWeekTasks(week, items.map((i) => i.key), true)}>
-                  Mark all done
-                </button>
-              ) : (
-                <button className="btn sm" onClick={() => setWeekTasks(week, items.map((i) => i.key), false)}>
-                  Clear all
-                </button>
-              )}
-              <button className="btn sm ghost" onClick={() => toggleSkipWeek(week)}>
-                {st === 'skipped' ? 'Unskip week' : 'Skip week'}
-              </button>
-              <span className="small faint" style={{ marginLeft: 'auto' }}>
-                {minutes > 0 ? `${fmtHours(minutes)} logged` : 'No time logged'}
-              </span>
-            </div>
-          </div>
-
-          <div className="card">
-            <div className="card-head">
-              <h2>Notes</h2>
-              <span className="hint">Saved when you leave the field</span>
-            </div>
-            <textarea
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              onBlur={saveNote}
-              placeholder="Key takeaways, links, questions, what to revisit…"
-              rows={7}
-              aria-label={`Notes for week ${week}`}
-            />
-          </div>
-
-          <div className="card">
-            <div className="card-head">
-              <h2>Weekly retrospective</h2>
-              {retro?.at && <span className="hint">Updated {fmtDate(retro.at)}</span>}
-            </div>
-            <div className="field">
-              <span className="label">How did the week go?</span>
-              <div className="rating" role="radiogroup" aria-label="Week rating">
-                {[1, 2, 3, 4, 5].map((n) => (
-                  <button
-                    key={n}
-                    type="button"
-                    role="radio"
-                    aria-checked={retro?.rating === n}
-                    className={`star${(retro?.rating ?? 0) >= n ? ' on' : ''}`}
-                    onClick={() => setRetro(week, { rating: retro?.rating === n ? 0 : n })}
-                    aria-label={`${n} of 5`}
-                  >
-                    <Star size={22} filled={(retro?.rating ?? 0) >= n} />
-                  </button>
-                ))}
-                <span className="small muted" style={{ marginLeft: 6 }}>
-                  {['', 'Rough', 'Below par', 'Okay', 'Good', 'Excellent'][retro?.rating ?? 0]}
-                </span>
-              </div>
-            </div>
-            <div className="grid-2" style={{ marginTop: 10 }}>
-              <div className="field">
-                <label htmlFor="retro-well">What went well</label>
-                <textarea
-                  id="retro-well"
-                  rows={3}
-                  value={wentWell}
-                  onChange={(e) => setWentWell(e.target.value)}
-                  onBlur={() => wentWell !== (retro?.wentWell ?? '') && setRetro(week, { wentWell })}
-                />
-              </div>
-              <div className="field">
-                <label htmlFor="retro-improve">What to improve next week</label>
-                <textarea
-                  id="retro-improve"
-                  rows={3}
-                  value={improve}
-                  onChange={(e) => setImprove(e.target.value)}
-                  onBlur={() => improve !== (retro?.improve ?? '') && setRetro(week, { improve })}
-                />
-              </div>
-            </div>
-          </div>
+          <WeekChecklistCard data={data} week={week} />
+          <WeekNotesCard data={data} week={week} />
+          <WeekRetroCard data={data} week={week} />
         </div>
-
         <div className="stack">
           <div className="card">
             <div className="card-head">
               <h2>Log time</h2>
-              <Link to="/log" className="small">
-                Study log →
-              </Link>
+              <MoreLink to="/log">Study log</MoreLink>
             </div>
-            <form onSubmit={submitLog} className="form-grid">
-              <div className="field">
-                <label htmlFor="wd-date">Date</label>
-                <input id="wd-date" type="date" value={logDate} onChange={(e) => setLogDate(e.target.value)} required />
-              </div>
-              <div className="field">
-                <label htmlFor="wd-hours">Hours</label>
-                <input id="wd-hours" type="number" min="0.25" step="0.25" value={logHours} onChange={(e) => setLogHours(e.target.value)} required />
-              </div>
-              <div className="field">
-                <label htmlFor="wd-tag">Type</label>
-                <select id="wd-tag" value={logTag} onChange={(e) => setLogTag(e.target.value as LogTag)}>
-                  {LOG_TAGS.map((t) => (
-                    <option key={t} value={t}>
-                      {t}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="field wide">
-                <label htmlFor="wd-note">Note</label>
-                <input id="wd-note" type="text" className="input" value={logNote} onChange={(e) => setLogNote(e.target.value)} placeholder="What did you work on?" />
-              </div>
-              <div className="form-actions wide" style={{ marginTop: 0 }}>
-                <button className="btn primary" type="submit">
-                  Add session
-                </button>
-              </div>
-            </form>
+            <LogSessionForm week={week} />
           </div>
-
-          <div className="card">
-            <div className="card-head">
-              <h2>Follow-ups for this week</h2>
-              <Link to="/followups" className="small">
-                All →
-              </Link>
-            </div>
-            <form onSubmit={submitFollowUp} className="form-grid">
-              <div className="field wide">
-                <label htmlFor="wd-fu">What needs following up?</label>
-                <input id="wd-fu" type="text" className="input" value={fuTitle} onChange={(e) => setFuTitle(e.target.value)} placeholder="e.g. Re-read Fiber lane priorities" required />
-              </div>
-              <div className="field">
-                <label htmlFor="wd-fu-due">Due</label>
-                <input id="wd-fu-due" type="date" value={fuDue} onChange={(e) => setFuDue(e.target.value)} />
-              </div>
-              <div className="field">
-                <label htmlFor="wd-fu-pri">Priority</label>
-                <select id="wd-fu-pri" value={fuPriority} onChange={(e) => setFuPriority(e.target.value as Priority)}>
-                  <option value="high">High</option>
-                  <option value="medium">Medium</option>
-                  <option value="low">Low</option>
-                </select>
-              </div>
-              <div className="form-actions wide" style={{ marginTop: 0 }}>
-                <button className="btn" type="submit">
-                  Add follow-up
-                </button>
-              </div>
-            </form>
-            {followUps.length === 0 ? (
-              <div className="hint" style={{ marginTop: 10 }}>
-                Nothing linked to this week yet.
-              </div>
-            ) : (
-              <ul className="list" style={{ marginTop: 10 }}>
-                {followUps.map((f) => (
-                  <li key={f.id} className={f.done ? 'done' : ''}>
-                    <input type="checkbox" checked={f.done} onChange={() => toggleFollowUp(f.id)} aria-label={`Mark "${f.title}" ${f.done ? 'open' : 'done'}`} style={{ marginTop: 3 }} />
-                    <div className="body">
-                      <div className="title">{f.title}</div>
-                      <div className="meta">
-                        {f.due && (
-                          <span className={isOverdue(f) ? 'pill overdue' : ''}>
-                            {isOverdue(f) ? (
-                              <>
-                                <AlertTriangle size={12} /> overdue ·{' '}
-                              </>
-                            ) : (
-                              'due '
-                            )}
-                            {relDay(f.due)}
-                          </span>
-                        )}
-                        <span>{f.priority}</span>
-                      </div>
-                    </div>
-                    <div className="actions">
-                      <button className="btn sm ghost icon" onClick={() => deleteFollowUp(f.id)} aria-label={`Delete "${f.title}"`}>
-                        <X size={14} />
-                      </button>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-
-          {data.logs.filter((l) => l.week === week).length > 0 && (
-            <div className="card">
-              <div className="card-head">
-                <h2>Sessions this week</h2>
-                <span className="small muted">{fmtHours(minutes)}</span>
-              </div>
-              <ul className="list">
-                {data.logs
-                  .filter((l) => l.week === week)
-                  .sort((a, b) => (a.date < b.date ? 1 : -1))
-                  .map((l) => (
-                    <li key={l.id}>
-                      <div className="body">
-                        <div className="title">
-                          {fmtHours(l.minutes)} <span className="pill">{l.tag}</span>
-                        </div>
-                        <div className="meta">
-                          <span>{fmtDate(l.date)}</span>
-                          {l.note && <span>{l.note}</span>}
-                        </div>
-                      </div>
-                    </li>
-                  ))}
-              </ul>
-            </div>
-          )}
-          {data.logs.filter((l) => l.week === week).length === 0 && <EmptyState>No sessions logged for this week yet.</EmptyState>}
-
-          <div className="card">
-            <div className="card-head">
-              <h2>Week summary</h2>
-            </div>
-            <dl className="kv">
-              <dt>Items</dt>
-              <dd>
-                {wp.done} / {wp.total}
-              </dd>
-              <dt>Time</dt>
-              <dd>
-                {fmtHours(minutes)} in {data.logs.filter((l) => l.week === week).length} sessions
-              </dd>
-              <dt>Follow-ups</dt>
-              <dd>
-                {followUps.filter((f) => f.done).length} closed, {followUps.filter((f) => !f.done).length} open
-              </dd>
-              <dt>DSA</dt>
-              <dd>{(data.problems ?? []).filter((p) => p.week === week && p.status === 'solved').length} solved</dd>
-              <dt>Rating</dt>
-              <dd>{retro?.rating ? '★'.repeat(retro.rating) : '—'}</dd>
-            </dl>
-            <div className="row" style={{ marginTop: 12 }}>
-              <button className="btn" onClick={copySummary}>
-                <Copy size={15} /> Copy as Markdown
-              </button>
-              <button className="btn ghost" onClick={() => downloadText(`week-${week}-summary.md`, weekSummaryMarkdown(data, week), 'text/markdown')}>
-                <Download size={15} /> Download .md
-              </button>
-            </div>
-          </div>
+          <WeekFollowUpsCard data={data} week={week} />
+          <WeekSessionsCard data={data} week={week} />
+          <WeekSummaryCard data={data} week={week} />
         </div>
       </div>
     </>
+  );
+}
+
+function WeekNav({ week }: { week: number }) {
+  return (
+    <nav className="week-nav" aria-label="Week navigation">
+      <Link to="/weeks" className="btn ghost">
+        All weeks
+      </Link>
+      {week > 1 ? (
+        <Link to={`/weeks/${week - 1}`} className="btn" aria-label={`Previous week, week ${week - 1}`}>
+          <ChevronLeft size={16} /> Week {week - 1}
+        </Link>
+      ) : (
+        <span className="btn" aria-disabled="true">
+          First week
+        </span>
+      )}
+      {week < TOTAL_WEEKS ? (
+        <Link to={`/weeks/${week + 1}`} className="btn" aria-label={`Next week, week ${week + 1}`}>
+          Week {week + 1} <ChevronRight size={16} />
+        </Link>
+      ) : (
+        <span className="btn" aria-disabled="true">
+          Last week
+        </span>
+      )}
+    </nav>
+  );
+}
+
+function WeekChecklistCard({ data, week }: { data: AppData; week: number }) {
+  const setWeekTasks = useStore((s) => s.setWeekTasks);
+  const toggleSkipWeek = useStore((s) => s.toggleSkipWeek);
+  const addCustomTask = useStore((s) => s.addCustomTask);
+  const def = weekDef(week);
+  const items = taskItems(data, week);
+  const wp = weekProgress(data, week);
+  const st = weekStatus(data, week);
+  const minutes = sessionsForWeek(data, week).reduce((s, l) => s + l.minutes, 0);
+  const [newTask, setNewTask] = useState('');
+
+  const submitTask = (e: FormEvent) => {
+    e.preventDefault();
+    if (!newTask.trim()) return;
+    addCustomTask(week, newTask.trim());
+    setNewTask('');
+    toast('Task added to this week.');
+  };
+
+  const markAll = () => {
+    setWeekTasks(week, items.map((i) => i.key), true);
+    toast(`Week ${week} marked done.`);
+  };
+  const clearAll = () => {
+    if (!window.confirm(`Untick all ${wp.total} ${TERMS.tasks} for week ${week}? Their completion dates will be lost.`)) return;
+    setWeekTasks(week, items.map((i) => i.key), false);
+    toast(`Week ${week} cleared.`);
+  };
+  const toggleSkip = () => {
+    toggleSkipWeek(week);
+    toast(st === 'skipped' ? `Week ${week} resumed.` : `Week ${week} skipped. Skipped weeks don't count against your pace.`);
+  };
+
+  return (
+    <div className="card">
+      <div className="card-head">
+        <h2>Checklist</h2>
+        <span className="row">
+          <StatusPill status={st} />
+          <span className="small ink-2 tabular">
+            {wp.done}/{wp.total}
+          </span>
+        </span>
+      </div>
+      <ProgressBar done={wp.done} total={wp.total} label="Week progress" valueText={`${wp.done} of ${wp.total} ${TERMS.tasks} done`} />
+      {def.milestone && (
+        <div className="section-sm">
+          <MilestoneBadge milestone={def.milestone} />{' '}
+          <MoreLink to="/projects">{projectById(def.milestone.project).title}</MoreLink>
+        </div>
+      )}
+      <div className="section-sm">
+        <TaskChecklist week={week} showDates deletable />
+      </div>
+      <form className="inline-add" onSubmit={submitTask}>
+        <input type="text" className="input" value={newTask} onChange={(e) => setNewTask(e.target.value)} placeholder="Add your own task for this week…" aria-label="New task for this week" />
+        <button className="btn" type="submit">
+          Add
+        </button>
+      </form>
+      <div className="row section-sm">
+        {wp.done < wp.total ? (
+          <button className="btn sm" onClick={markAll}>
+            Mark all done
+          </button>
+        ) : (
+          <button className="btn sm" onClick={clearAll}>
+            Untick all
+          </button>
+        )}
+        <button className="btn sm ghost" onClick={toggleSkip} title="Skipped weeks don't count against your pace">
+          {st === 'skipped' ? 'Resume week' : 'Skip week'}
+        </button>
+        <span className="small ink-3 push-end">{minutes > 0 ? `${fmtHours(minutes)} logged` : 'No time logged yet'}</span>
+      </div>
+    </div>
+  );
+}
+
+function WeekNotesCard({ data, week }: { data: AppData; week: number }) {
+  const setWeekNote = useStore((s) => s.setWeekNote);
+  const [note, setNote, commit] = useDraft(data.weekNotes[String(week)] ?? '', (v) => {
+    setWeekNote(week, v);
+    toast('Notes saved.');
+  });
+  return (
+    <div className="card">
+      <div className="card-head">
+        <h2>Notes</h2>
+        <span className="hint">Saved when you leave the field</span>
+      </div>
+      <textarea value={note} onChange={(e) => setNote(e.target.value)} onBlur={commit} placeholder="Key takeaways, links, questions, what to revisit…" rows={7} aria-label={`Notes for week ${week}`} />
+    </div>
+  );
+}
+
+function RatingInput({ value, onChange, labelId, descId }: { value: number; onChange: (n: number) => void; labelId: string; descId: string }) {
+  const focusIdx = Math.max(0, (value || 1) - 1);
+  const move = (i: number) => {
+    onChange(i + 1);
+    document.getElementById(`${labelId}-star-${i}`)?.focus();
+  };
+  return (
+    <div className="rating" role="radiogroup" aria-labelledby={labelId} aria-describedby={descId}>
+      {[1, 2, 3, 4, 5].map((n, i) => (
+        <button
+          key={n}
+          id={`${labelId}-star-${i}`}
+          type="button"
+          role="radio"
+          aria-checked={value === n}
+          aria-label={`${n} of 5, ${RATING_LABEL[n]}`}
+          tabIndex={i === focusIdx ? 0 : -1}
+          className={`star${value >= n ? ' on' : ''}`}
+          onClick={() => onChange(value === n ? 0 : n)}
+          onKeyDown={(e) => rovingKey(e, i, 5, move)}
+        >
+          <Star size={22} filled={value >= n} />
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function WeekRetroCard({ data, week }: { data: AppData; week: number }) {
+  const id = useId();
+  const setRetro = useStore((s) => s.setRetro);
+  const retro = data.retros[String(week)];
+  const [wentWell, setWentWell, commitWell] = useDraft(retro?.wentWell ?? '', (v) => {
+    setRetro(week, { wentWell: v });
+    toast('Retrospective saved.');
+  });
+  const [improve, setImprove, commitImprove] = useDraft(retro?.improve ?? '', (v) => {
+    setRetro(week, { improve: v });
+    toast('Retrospective saved.');
+  });
+  const rating = retro?.rating ?? 0;
+  return (
+    <div className="card">
+      <div className="card-head">
+        <h2>Weekly retrospective</h2>
+        {retro?.at && <span className="hint">Updated {fmtDate(retro.at)}</span>}
+      </div>
+      <div className="field">
+        <span className="label" id={`${id}-rating-label`}>
+          How did the week go?
+        </span>
+        <div className="row">
+          <RatingInput value={rating} onChange={(n) => setRetro(week, { rating: n })} labelId={`${id}-rating-label`} descId={`${id}-rating-desc`} />
+          <span className="small ink-2" id={`${id}-rating-desc`}>
+            {RATING_LABEL[rating]}
+          </span>
+        </div>
+      </div>
+      <div className="grid-2 section-sm">
+        <div className="field">
+          <label htmlFor={`${id}-well`}>What went well</label>
+          <textarea id={`${id}-well`} rows={3} value={wentWell} onChange={(e) => setWentWell(e.target.value)} onBlur={commitWell} />
+        </div>
+        <div className="field">
+          <label htmlFor={`${id}-improve`}>What to improve next week</label>
+          <textarea id={`${id}-improve`} rows={3} value={improve} onChange={(e) => setImprove(e.target.value)} onBlur={commitImprove} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function WeekFollowUpsCard({ data, week }: { data: AppData; week: number }) {
+  const followUps = sortFollowUps(data.followUps.filter((f) => f.week === week));
+  return (
+    <div className="card">
+      <div className="card-head">
+        <h2>Follow-ups for this week</h2>
+        <MoreLink to="/followups" ariaLabel="All follow-ups">
+          All follow-ups
+        </MoreLink>
+      </div>
+      <FollowUpForm week={week} />
+      {followUps.length === 0 ? (
+        <div className="hint section-sm">Nothing linked to this week yet.</div>
+      ) : (
+        <ul className="list section-sm">
+          {followUps.map((f) => (
+            <FollowUpRow key={f.id} f={f} compact />
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function WeekSessionsCard({ data, week }: { data: AppData; week: number }) {
+  const deleteLog = useStore((s) => s.deleteLog);
+  const sessions = sessionsForWeek(data, week);
+  const minutes = sessions.reduce((s, l) => s + l.minutes, 0);
+  return (
+    <div className="card">
+      <div className="card-head">
+        <h2>Sessions this week</h2>
+        <span className="small ink-2">{sessions.length ? `${fmtHours(minutes)} in ${plural(sessions.length, 'session')}` : ''}</span>
+      </div>
+      {sessions.length === 0 ? (
+        <EmptyState>No sessions for this week yet. Use Log time above, or start the focus timer.</EmptyState>
+      ) : (
+        <ul className="list">
+          {sessions.map((l) => (
+            <SessionRow
+              key={l.id}
+              log={l}
+              showDate
+              onDelete={() => {
+                if (!window.confirm(`Delete this ${fmtHours(l.minutes)} session?`)) return;
+                deleteLog(l.id);
+                toast('Session deleted.');
+              }}
+            />
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function WeekSummaryCard({ data, week }: { data: AppData; week: number }) {
+  const wp = weekProgress(data, week);
+  const sessions = sessionsForWeek(data, week);
+  const minutes = sessions.reduce((s, l) => s + l.minutes, 0);
+  const followUps = data.followUps.filter((f) => f.week === week);
+  const solved = data.problems.filter((p) => p.week === week && p.status === 'solved').length;
+  const rating = data.retros[String(week)]?.rating ?? 0;
+
+  const copy = async () => {
+    const md = weekSummaryMarkdown(data, week);
+    try {
+      await navigator.clipboard.writeText(md);
+      toast('Week summary copied as Markdown.');
+    } catch {
+      downloadText(`week-${week}-summary.md`, md, 'text/markdown');
+      toast('Clipboard unavailable, so the summary was downloaded instead.');
+    }
+  };
+
+  return (
+    <div className="card">
+      <div className="card-head">
+        <h2>Week summary</h2>
+      </div>
+      <dl className="kv">
+        <dt>Tasks</dt>
+        <dd>
+          {wp.done} / {wp.total}
+        </dd>
+        <dt>Time</dt>
+        <dd>
+          {fmtHours(minutes)} in {plural(sessions.length, 'session')}
+        </dd>
+        <dt>Follow-ups</dt>
+        <dd>
+          {followUps.filter((f) => f.done).length} closed, {followUps.filter((f) => !f.done).length} open
+        </dd>
+        <dt>DSA</dt>
+        <dd>{plural(solved, 'problem')} solved</dd>
+        <dt>Rating</dt>
+        <dd>{rating ? <Stars rating={rating} size={13} /> : '—'}</dd>
+      </dl>
+      <div className="row section-sm">
+        <button className="btn" onClick={copy}>
+          <Copy size={15} /> Copy as Markdown
+        </button>
+        <button className="btn ghost" onClick={() => downloadText(`week-${week}-summary.md`, weekSummaryMarkdown(data, week), 'text/markdown')}>
+          <Download size={15} /> Download .md
+        </button>
+      </div>
+    </div>
   );
 }

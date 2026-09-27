@@ -1,38 +1,45 @@
-import { useMemo, useState, type FormEvent } from 'react';
-import { DIFFICULTIES, REVIEW_INTERVALS, useStore, type Difficulty, type Problem } from '@/store/useStore';
-import { TOTAL_WEEKS, weekDef } from '@/data/roadmap';
+import { useId, useMemo, useRef, useState, type FormEvent } from 'react';
+import { Link } from 'react-router-dom';
+import { REVIEW_INTERVALS, useStore, type Difficulty, type Problem } from '@/store/useStore';
+import { weekDef } from '@/data/roadmap';
 import { currentWeek, isReviewDue, problemStats } from '@/lib/derive';
-import { fmtDate, relDay, today } from '@/lib/date';
-import { EmptyState, PageHead, StatTile, Tabs, WeekLink, toast } from '@/components/ui';
+import { addDays, fmtDate, relDay, today } from '@/lib/date';
+import { plural } from '@/lib/format';
+import { DIFFICULTY_LABEL } from '@/lib/labels';
+import { EmptyState, PageHead, StatTile, Tabs, Vi, WeekLink, toast } from '@/components/ui';
+import { DifficultySelect, WeekSelect, dsaTopic } from '@/components/fields';
+import { InlineNoteEditor } from '@/components/InlineNoteEditor';
 import { RefreshCw, X } from '@/components/icons';
 
 type Filter = 'due' | 'todo' | 'solved' | 'all';
 
-const DIFF_CLASS: Record<Difficulty, string> = { easy: 'pill good', medium: 'pill warning', hard: 'pill critical' };
-
-/* Suggest a topic from the roadmap's DSA entry for a week: "Two Pointers (3Sum, Two Sum II)" -> "Two Pointers". */
-const topicFromWeek = (week: number) => weekDef(week).dsa.replace(/\s*\(.*$/, '').trim();
+const EMPTY: Record<Filter, string> = {
+  due: 'No reviews due. Solve something new, or check the to-do list.',
+  todo: 'Nothing left to solve. Add a problem above.',
+  solved: 'Nothing solved yet. Use "Mark solved" on a problem when you finish it.',
+  all: "No problems yet. Add one above, for example from this week's DSA topic.",
+};
 
 export default function Problems() {
+  const id = useId();
   const data = useStore();
   const { addProblem, updateProblem, deleteProblem, markProblemSolved, markProblemReviewed, resetProblem } = useStore();
   const cw = currentWeek(data);
+  const stats = problemStats(data);
 
   const [title, setTitle] = useState('');
   const [url, setUrl] = useState('');
   const [difficulty, setDifficulty] = useState<Difficulty>('medium');
   const [week, setWeek] = useState<string>(cw ? String(cw) : '');
-  const [topic, setTopic] = useState<string>(cw ? topicFromWeek(cw) : '');
+  const [topic, setTopic] = useState<string>(cw ? dsaTopic(cw) : '');
   const [topicTouched, setTopicTouched] = useState(false);
-  const [filter, setFilter] = useState<Filter>('due');
+  const [filter, setFilter] = useState<Filter>(() => (stats.total === 0 ? 'all' : 'due'));
   const [editing, setEditing] = useState<string | null>(null);
-  const [editNote, setEditNote] = useState('');
-
-  const stats = problemStats(data);
+  const titleRef = useRef<HTMLInputElement>(null);
 
   const onWeekChange = (w: string) => {
     setWeek(w);
-    if (!topicTouched) setTopic(w ? topicFromWeek(Number(w)) : '');
+    if (!topicTouched) setTopic(w ? dsaTopic(Number(w)) : '');
   };
 
   const submit = (e: FormEvent) => {
@@ -41,12 +48,12 @@ export default function Problems() {
     addProblem({ title: title.trim(), url: url.trim(), difficulty, topic: topic.trim(), week: week ? Number(week) : undefined, note: '' });
     setTitle('');
     setUrl('');
-    toast('Problem added');
+    toast('Problem added to your to-do list.');
+    titleRef.current?.focus();
   };
 
   const list = useMemo(() => {
-    const all = data.problems ?? [];
-    const subset = all.filter((p) => {
+    const subset = data.problems.filter((p) => {
       if (filter === 'due') return isReviewDue(p);
       if (filter === 'todo') return p.status === 'todo';
       if (filter === 'solved') return p.status === 'solved';
@@ -62,130 +69,120 @@ export default function Problems() {
     });
   }, [data.problems, filter]);
 
-  const counts = {
-    due: stats.due,
-    todo: stats.total - stats.solved,
-    solved: stats.solved,
-    all: stats.total,
-  };
+  const counts = { due: stats.due, todo: stats.total - stats.solved, solved: stats.solved, all: stats.total };
 
   return (
     <>
       <PageHead
         title="DSA problems"
-        subtitle={`Track problems from the weekly DSA track and NeetCode 150. Solved problems come back for review after ${REVIEW_INTERVALS.join(', ')} days.`}
+        subtitle={`Problems from the weekly DSA track and NeetCode 150. Solved problems come back for review after ${REVIEW_INTERVALS.join(', ')} days, so they stick.`}
       />
 
-      <div className="grid-tiles">
-        <StatTile label="Solved" value={stats.solved} sub={`of ${stats.total} tracked`} />
-        <StatTile label="By difficulty" value={`${stats.easy} / ${stats.medium} / ${stats.hard}`} sub="easy / medium / hard" />
-        <StatTile label="Due for review" value={stats.due} sub={stats.due > 0 ? 'Re-solve without looking at the answer' : 'Nothing due today'} />
-        <StatTile label="This week's topic" value={cw ? topicFromWeek(cw) : '—'} sub={cw ? weekDef(cw).dsa : 'Set a start date'} />
-      </div>
-
-      <div className="card" style={{ marginTop: 14 }}>
-        <div className="card-head">
-          <h2>Add problem</h2>
+      <div className="stack">
+        <div className="grid-tiles">
+          <StatTile label="Solved" value={stats.solved} sub={`of ${stats.total} tracked`} />
+          <StatTile label="Solved by difficulty" value={`${stats.easy} · ${stats.medium} · ${stats.hard}`} sub="Easy · Medium · Hard" srValue={`${stats.easy} easy, ${stats.medium} medium, ${stats.hard} hard`} />
+          <StatTile label="Due for review" value={stats.due} sub={stats.due > 0 ? 'Re-solve without looking at the answer' : 'Nothing due today'} />
+          <StatTile
+            label="This week's topic"
+            value={cw ? <Vi>{dsaTopic(cw)}</Vi> : '—'}
+            sub={cw ? <Vi>{weekDef(cw).dsa}</Vi> : <Link to="/settings">Set a start date</Link>}
+          />
         </div>
-        <form onSubmit={submit} className="form-grid">
-          <div className="field" style={{ gridColumn: 'span 2' }}>
-            <label htmlFor="pb-title">Title</label>
-            <input id="pb-title" type="text" className="input" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Trapping Rain Water" required />
-          </div>
-          <div className="field" style={{ gridColumn: 'span 2' }}>
-            <label htmlFor="pb-url">Link</label>
-            <input id="pb-url" type="url" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://leetcode.com/problems/…" />
-          </div>
-          <div className="field">
-            <label htmlFor="pb-diff">Difficulty</label>
-            <select id="pb-diff" value={difficulty} onChange={(e) => setDifficulty(e.target.value as Difficulty)}>
-              {DIFFICULTIES.map((d) => (
-                <option key={d} value={d}>
-                  {d}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="field">
-            <label htmlFor="pb-week">Week</label>
-            <select id="pb-week" value={week} onChange={(e) => onWeekChange(e.target.value)}>
-              <option value="">— none —</option>
-              {Array.from({ length: TOTAL_WEEKS }, (_, i) => i + 1).map((w) => (
-                <option key={w} value={w}>
-                  Week {w} · {topicFromWeek(w)}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="field">
-            <label htmlFor="pb-topic">Topic</label>
-            <input
-              id="pb-topic"
-              type="text"
-              className="input"
-              value={topic}
-              onChange={(e) => {
-                setTopic(e.target.value);
-                setTopicTouched(true);
-              }}
-              placeholder="e.g. Two Pointers"
-            />
-          </div>
-          <div className="form-actions" style={{ marginTop: 0 }}>
-            <button className="btn primary" type="submit">
-              Add
-            </button>
-          </div>
-        </form>
-      </div>
 
-      <div className="card" style={{ marginTop: 14 }}>
-        <Tabs<Filter>
-          value={filter}
-          onChange={setFilter}
-          items={[
-            { id: 'due', label: `Due for review (${counts.due})` },
-            { id: 'todo', label: `To do (${counts.todo})` },
-            { id: 'solved', label: `Solved (${counts.solved})` },
-            { id: 'all', label: `All (${counts.all})` },
-          ]}
-        />
-        {list.length === 0 ? (
-          <EmptyState>
-            {filter === 'due' ? 'No reviews due. Solve something new, or check the to-do list.' : 'No problems here yet.'}
-          </EmptyState>
-        ) : (
-          <ul className="list">
-            {list.map((p) => (
-              <ProblemRow
-                key={p.id}
-                p={p}
-                editing={editing === p.id}
-                editNote={editNote}
-                onEditNote={setEditNote}
-                onStartEdit={() => {
-                  setEditing(p.id);
-                  setEditNote(p.note);
+        <div className="card">
+          <div className="card-head">
+            <h2>Add a problem</h2>
+          </div>
+          <form onSubmit={submit} className="form-grid">
+            <div className="field span-2">
+              <label htmlFor={`${id}-title`}>Problem name</label>
+              <input ref={titleRef} id={`${id}-title`} type="text" className="input" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Trapping Rain Water" required />
+            </div>
+            <div className="field span-2">
+              <label htmlFor={`${id}-url`}>Link</label>
+              <input id={`${id}-url`} type="url" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://leetcode.com/problems/… (optional)" />
+            </div>
+            <div className="field">
+              <label htmlFor={`${id}-diff`}>Difficulty</label>
+              <DifficultySelect id={`${id}-diff`} value={difficulty} onChange={setDifficulty} />
+            </div>
+            <div className="field">
+              <label htmlFor={`${id}-week`}>Roadmap week</label>
+              <WeekSelect id={`${id}-week`} value={week} onChange={onWeekChange} labelOf={dsaTopic} />
+            </div>
+            <div className="field">
+              <label htmlFor={`${id}-topic`}>Topic</label>
+              <input
+                id={`${id}-topic`}
+                type="text"
+                className="input"
+                value={topic}
+                onChange={(e) => {
+                  setTopic(e.target.value);
+                  setTopicTouched(true);
                 }}
-                onSaveEdit={() => {
-                  updateProblem(p.id, { note: editNote.trim() });
-                  setEditing(null);
-                }}
-                onCancelEdit={() => setEditing(null)}
-                onSolved={() => {
-                  markProblemSolved(p.id);
-                  toast(`Solved. Review ${relDay(today())}? No, in ${REVIEW_INTERVALS[0]} day.`);
-                }}
-                onReviewed={() => {
-                  markProblemReviewed(p.id);
-                  toast('Reviewed. Next interval scheduled.');
-                }}
-                onReset={() => resetProblem(p.id)}
-                onDelete={() => deleteProblem(p.id)}
+                placeholder="e.g. Two Pointers"
               />
-            ))}
-          </ul>
-        )}
+            </div>
+            <div className="form-actions">
+              <button className="btn primary" type="submit">
+                Add problem
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <div className="card">
+          <Tabs<Filter>
+            value={filter}
+            onChange={setFilter}
+            items={[
+              { id: 'due', label: `Due for review (${counts.due})` },
+              { id: 'todo', label: `To do (${counts.todo})` },
+              { id: 'solved', label: `Solved (${counts.solved})` },
+              { id: 'all', label: `All (${counts.all})` },
+            ]}
+          />
+          {list.length === 0 ? (
+            <EmptyState>{EMPTY[filter]}</EmptyState>
+          ) : (
+            <ul className="list">
+              {list.map((p) => (
+                <ProblemRow
+                  key={p.id}
+                  p={p}
+                  editing={editing === p.id}
+                  onStartEdit={() => setEditing(p.id)}
+                  onSaveEdit={(v) => {
+                    updateProblem(p.id, { note: v });
+                    setEditing(null);
+                    toast('Notes saved.');
+                  }}
+                  onCancelEdit={() => setEditing(null)}
+                  onSolved={() => {
+                    markProblemSolved(p.id);
+                    toast(`Marked solved. First review ${relDay(addDays(today(), REVIEW_INTERVALS[0]))}.`);
+                  }}
+                  onReviewed={() => {
+                    const days = REVIEW_INTERVALS[Math.min(p.reviewCount + 1, REVIEW_INTERVALS.length - 1)];
+                    markProblemReviewed(p.id);
+                    toast(`Reviewed. Next review in ${plural(days, 'day')}.`);
+                  }}
+                  onReset={() => {
+                    resetProblem(p.id);
+                    toast('Moved back to to-do.');
+                  }}
+                  onDelete={() => {
+                    if (!window.confirm(`Delete "${p.title}" and its review history?`)) return;
+                    deleteProblem(p.id);
+                    toast('Problem deleted.');
+                  }}
+                />
+              ))}
+            </ul>
+          )}
+        </div>
       </div>
     </>
   );
@@ -194,10 +191,8 @@ export default function Problems() {
 interface RowProps {
   p: Problem;
   editing: boolean;
-  editNote: string;
-  onEditNote: (v: string) => void;
   onStartEdit: () => void;
-  onSaveEdit: () => void;
+  onSaveEdit: (v: string) => void;
   onCancelEdit: () => void;
   onSolved: () => void;
   onReviewed: () => void;
@@ -205,7 +200,7 @@ interface RowProps {
   onDelete: () => void;
 }
 
-function ProblemRow({ p, editing, editNote, onEditNote, onStartEdit, onSaveEdit, onCancelEdit, onSolved, onReviewed, onReset, onDelete }: RowProps) {
+function ProblemRow({ p, editing, onStartEdit, onSaveEdit, onCancelEdit, onSolved, onReviewed, onReset, onDelete }: RowProps) {
   const due = isReviewDue(p);
   return (
     <li className={p.status === 'solved' && !due ? 'done' : ''}>
@@ -214,11 +209,12 @@ function ProblemRow({ p, editing, editNote, onEditNote, onStartEdit, onSaveEdit,
           {p.url ? (
             <a href={p.url} target="_blank" rel="noreferrer">
               {p.title}
+              <span className="sr-only"> (opens in a new tab)</span>
             </a>
           ) : (
             p.title
           )}{' '}
-          <span className={DIFF_CLASS[p.difficulty]}>{p.difficulty}</span>
+          <span className="pill">{DIFFICULTY_LABEL[p.difficulty]}</span>
           {due && (
             <span className="pill overdue">
               <RefreshCw size={12} /> review due
@@ -230,41 +226,35 @@ function ProblemRow({ p, editing, editNote, onEditNote, onStartEdit, onSaveEdit,
           {p.week && <WeekLink week={p.week} />}
           {p.status === 'solved' && p.solvedAt && <span>solved {fmtDate(p.solvedAt)}</span>}
           {p.status === 'solved' && p.nextReview && !due && <span>next review {relDay(p.nextReview)}</span>}
-          {p.reviewCount > 0 && <span>{p.reviewCount}× reviewed</span>}
+          {p.reviewCount > 0 && <span>reviewed {p.reviewCount}×</span>}
         </div>
         {editing ? (
-          <div className="row" style={{ marginTop: 6 }}>
-            <textarea className="grow" rows={2} value={editNote} onChange={(e) => onEditNote(e.target.value)} aria-label="Approach notes" placeholder="Approach, complexity, pitfalls…" />
-            <button className="btn sm" onClick={onSaveEdit}>
-              Save
-            </button>
-            <button className="btn sm ghost" onClick={onCancelEdit}>
-              Cancel
-            </button>
-          </div>
+          <InlineNoteEditor value={p.note} label={`Notes for ${p.title}`} placeholder="Approach, complexity, pitfalls…" onSave={onSaveEdit} onCancel={onCancelEdit} />
         ) : (
           p.note && <div className="note">{p.note}</div>
         )}
       </div>
       <div className="actions">
         {p.status === 'todo' && (
-          <button className="btn sm" onClick={onSolved}>
-            Solved
+          <button className="btn sm" onClick={onSolved} aria-label={`Mark ${p.title} solved`}>
+            Mark solved
           </button>
         )}
         {due && (
-          <button className="btn sm primary" onClick={onReviewed}>
-            Reviewed
+          <button className="btn sm primary" onClick={onReviewed} aria-label={`Mark ${p.title} reviewed`}>
+            Mark reviewed
           </button>
         )}
         {p.status === 'solved' && !due && (
-          <button className="btn sm ghost" onClick={onReset} title="Move back to to-do">
-            Redo
+          <button className="btn sm ghost" onClick={onReset} aria-label={`Move ${p.title} back to to-do`}>
+            Move to to-do
           </button>
         )}
-        <button className="btn sm ghost" onClick={onStartEdit} aria-label={`Edit notes for ${p.title}`}>
-          Notes
-        </button>
+        {!editing && (
+          <button className="btn sm ghost" onClick={onStartEdit} aria-label={`Edit notes for ${p.title}`}>
+            Edit notes
+          </button>
+        )}
         <button className="btn sm ghost icon" onClick={onDelete} aria-label={`Delete ${p.title}`}>
           <X size={14} />
         </button>

@@ -1,6 +1,7 @@
-/* ISO date (YYYY-MM-DD) helpers. All dates are local-time calendar days. */
+/* ISO date (YYYY-MM-DD) helpers. All dates are local-time calendar days; display uses en-GB. */
 
 const pad = (n: number) => String(n).padStart(2, '0');
+const LOCALE = 'en-GB';
 
 export const toISODate = (d: Date): string => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 
@@ -29,11 +30,37 @@ export const weekStart = (s: string): string => {
   return toISODate(d);
 };
 
-export const fmtDate = (s: string | undefined | null, opts?: Intl.DateTimeFormatOptions): string =>
-  s ? parseDate(s).toLocaleDateString('en-GB', opts ?? { day: 'numeric', month: 'short' }) : '';
+export const isValidISODate = (s: unknown): s is string =>
+  typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s) && !Number.isNaN(parseDate(s).getTime());
 
-export const fmtDateLong = (s: string | undefined | null): string =>
-  fmtDate(s, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+/* ---- Display formats (one name per shape, so pages never pass Intl options ad hoc) ---- */
+
+type D = string | null | undefined;
+
+/* "4 Oct" */
+export const fmtDate = (s: D): string => (s ? parseDate(s).toLocaleDateString(LOCALE, { day: 'numeric', month: 'short' }) : '');
+
+/* "4 October 2026" */
+export const fmtDateFull = (s: D): string => (s ? parseDate(s).toLocaleDateString(LOCALE, { day: 'numeric', month: 'long', year: 'numeric' }) : '');
+
+/* "Sun, 4 Oct 2026" */
+export const fmtDateLong = (s: D): string =>
+  s ? parseDate(s).toLocaleDateString(LOCALE, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }) : '';
+
+/* "Sunday, 4 October 2026" */
+export const fmtDateWeekday = (s: D): string =>
+  s ? parseDate(s).toLocaleDateString(LOCALE, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) : '';
+
+/* "4 Oct 2026, 14:05" from an ISO timestamp */
+export const fmtDateTime = (iso: D): string =>
+  iso ? new Date(iso).toLocaleString(LOCALE, { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
+
+/* "4 Oct – 10 Oct" (or with years when `long`) */
+export const fmtRange = (range: { start: string; end: string } | null | undefined, long = false): string => {
+  if (!range) return '';
+  const f = long ? fmtDateLong : fmtDate;
+  return `${f(range.start)} – ${f(range.end)}`;
+};
 
 export const relDay = (s: string): string => {
   const n = diffDays(today(), s);
@@ -41,35 +68,4 @@ export const relDay = (s: string): string => {
   if (n === 1) return 'tomorrow';
   if (n === -1) return 'yesterday';
   return n > 0 ? `in ${n} days` : `${-n} days ago`;
-};
-
-export const isValidISODate = (s: unknown): s is string =>
-  typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s) && !Number.isNaN(parseDate(s).getTime());
-
-/* ---- misc small helpers ---- */
-
-export const uid = (): string => Math.random().toString(36).slice(2, 8) + Date.now().toString(36);
-
-export const clamp = (n: number, lo: number, hi: number): number => Math.max(lo, Math.min(hi, n));
-
-export const pct = (a: number, b: number): number => (b ? Math.round((a / b) * 100) : 0);
-
-/* 90 -> "1.5h", 30 -> "0.5h", 120 -> "2h" */
-export const fmtHours = (minutes: number): string => {
-  const h = Math.round((minutes / 60) * 10) / 10;
-  return `${h}h`;
-};
-
-export const plural = (n: number, one: string, many?: string): string => `${n} ${n === 1 ? one : many ?? one + 's'}`;
-
-export const downloadText = (filename: string, text: string, type = 'application/json'): void => {
-  const blob = new Blob([text], { type });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
 };
