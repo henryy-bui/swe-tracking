@@ -15,11 +15,12 @@ export default function WeekDetail() {
 
 function WeekBody({ week }: { week: number }) {
   const data = useStore();
-  const { setTask, setWeekTasks, setWeekNote, toggleSkipWeek, addLog, addFollowUp, toggleFollowUp, deleteFollowUp } = useStore();
+  const { setTask, setWeekTasks, setWeekNote, toggleSkipWeek, addLog, addFollowUp, toggleFollowUp, deleteFollowUp, addCustomTask, deleteCustomTask, setRetro } =
+    useStore();
 
   const def = weekDef(week);
   const phase = phaseOfWeek(week);
-  const items = taskItems(week);
+  const items = taskItems(data, week);
   const wp = weekProgress(data, week);
   const st = weekStatus(data, week);
   const range = weekRange(data, week);
@@ -38,6 +39,22 @@ function WeekBody({ week }: { week: number }) {
   const [fuTitle, setFuTitle] = useState('');
   const [fuDue, setFuDue] = useState('');
   const [fuPriority, setFuPriority] = useState<Priority>('medium');
+
+  const [newTask, setNewTask] = useState('');
+  const retro = data.retros?.[String(week)];
+  const [wentWell, setWentWell] = useState(retro?.wentWell ?? '');
+  const [improve, setImprove] = useState(retro?.improve ?? '');
+  useEffect(() => {
+    setWentWell(retro?.wentWell ?? '');
+    setImprove(retro?.improve ?? '');
+  }, [week, retro?.wentWell, retro?.improve]);
+
+  const submitTask = (e: FormEvent) => {
+    e.preventDefault();
+    if (!newTask.trim()) return;
+    addCustomTask(week, newTask.trim());
+    setNewTask('');
+  };
 
   const submitLog = (e: FormEvent) => {
     e.preventDefault();
@@ -134,14 +151,26 @@ function WeekBody({ week }: { week: number }) {
                       <input type="checkbox" checked={done} onChange={(e) => setTask(it.key, e.target.checked)} />
                       <span>
                         {it.kind === 'dsa' && <span className="kind-tag">DSA</span>}
+                        {it.kind === 'custom' && <span className="kind-tag">Mine</span>}
                         {it.label}
                       </span>
                     </label>
                     {done && mark?.at && <span className="meta">{fmtDate(mark.at)}</span>}
+                    {it.kind === 'custom' && it.customId && (
+                      <button className="btn sm ghost" onClick={() => deleteCustomTask(week, it.customId!)} aria-label={`Delete task "${it.label}"`}>
+                        ✕
+                      </button>
+                    )}
                   </li>
                 );
               })}
             </ul>
+            <form className="inline-add" onSubmit={submitTask}>
+              <input type="text" className="input" value={newTask} onChange={(e) => setNewTask(e.target.value)} placeholder="Add your own task for this week…" aria-label="New task" />
+              <button className="btn" type="submit">
+                Add
+              </button>
+            </form>
             <div className="row" style={{ marginTop: 12 }}>
               {wp.done < wp.total ? (
                 <button className="btn sm" onClick={() => setWeekTasks(week, items.map((i) => i.key), true)}>
@@ -174,6 +203,56 @@ function WeekBody({ week }: { week: number }) {
               rows={7}
               aria-label={`Notes for week ${week}`}
             />
+          </div>
+
+          <div className="card">
+            <div className="card-head">
+              <h2>Weekly retrospective</h2>
+              {retro?.at && <span className="hint">Updated {fmtDate(retro.at)}</span>}
+            </div>
+            <div className="field">
+              <span className="label">How did the week go?</span>
+              <div className="rating" role="radiogroup" aria-label="Week rating">
+                {[1, 2, 3, 4, 5].map((n) => (
+                  <button
+                    key={n}
+                    type="button"
+                    role="radio"
+                    aria-checked={retro?.rating === n}
+                    className={`star${(retro?.rating ?? 0) >= n ? ' on' : ''}`}
+                    onClick={() => setRetro(week, { rating: retro?.rating === n ? 0 : n })}
+                    aria-label={`${n} of 5`}
+                  >
+                    ★
+                  </button>
+                ))}
+                <span className="small muted" style={{ marginLeft: 6 }}>
+                  {['', 'Rough', 'Below par', 'Okay', 'Good', 'Excellent'][retro?.rating ?? 0]}
+                </span>
+              </div>
+            </div>
+            <div className="grid-2" style={{ marginTop: 10 }}>
+              <div className="field">
+                <label htmlFor="retro-well">What went well</label>
+                <textarea
+                  id="retro-well"
+                  rows={3}
+                  value={wentWell}
+                  onChange={(e) => setWentWell(e.target.value)}
+                  onBlur={() => wentWell !== (retro?.wentWell ?? '') && setRetro(week, { wentWell })}
+                />
+              </div>
+              <div className="field">
+                <label htmlFor="retro-improve">What to improve next week</label>
+                <textarea
+                  id="retro-improve"
+                  rows={3}
+                  value={improve}
+                  onChange={(e) => setImprove(e.target.value)}
+                  onBlur={() => improve !== (retro?.improve ?? '') && setRetro(week, { improve })}
+                />
+              </div>
+            </div>
           </div>
         </div>
 

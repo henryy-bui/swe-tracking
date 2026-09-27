@@ -3,12 +3,13 @@ import { Link } from 'react-router-dom';
 import { useStore } from '@/store/useStore';
 import { PHASES, PROJECTS, TOTAL_WEEKS, phaseOfWeek, weekDef } from '@/data/roadmap';
 import {
-  currentWeek, expectedDone, isOverdue, minutesByCalendarWeek, minutesThisWeek, openFollowUps, overallProgress, overdueFollowUps,
-  pace, phaseProgress, planStatus, projectProgress, projectState, sortFollowUps, streak, taskItems, isDone, weekProgress, weekRange, weekStatus,
+  activeDays, currentWeek, dueProblems, expectedDone, isOverdue, minutesByCalendarWeek, minutesByDay, minutesThisWeek, openFollowUps, overallProgress,
+  overdueFollowUps, pace, phaseProgress, planStatus, projectProgress, projectState, sortFollowUps, streak, taskItems, isDone, weekProgress, weekRange, weekStatus,
 } from '@/lib/derive';
 import { diffDays, fmtDate, fmtHours, pct, plural, relDay, today } from '@/lib/date';
 import { EmptyState, PageHead, ProgressBar, ProgressLine, StatTile, StatusPill, WeekLink } from '@/components/ui';
 import { WeeklyHoursChart } from '@/components/WeeklyHoursChart';
+import { ActivityHeatmap } from '@/components/ActivityHeatmap';
 import { toast } from '@/components/ui';
 
 const PROJECT_STATUS_LABEL = { 'not-started': 'Not started', 'in-progress': 'In progress', done: 'Done' } as const;
@@ -31,6 +32,7 @@ export default function Overview() {
   const expected = expectedDone(data);
   const buckets = minutesByCalendarWeek(data, 12);
   const dueSoon = sortFollowUps(open).slice(0, 6);
+  const reviewsDue = dueProblems(data).length;
 
   const submitStart = (e: FormEvent) => {
     e.preventDefault();
@@ -169,7 +171,7 @@ export default function Overview() {
             {weekDef(cw ?? 1).topic}
           </div>
           <ul className="checklist">
-            {taskItems(cw ?? 1).map((it) => {
+            {taskItems(data, cw ?? 1).map((it) => {
               const done = isDone(data, it.key);
               return (
                 <li key={it.key} className={done ? 'done' : ''}>
@@ -177,6 +179,7 @@ export default function Overview() {
                     <input type="checkbox" checked={done} onChange={(e) => setTask(it.key, e.target.checked)} />
                     <span>
                       {it.kind === 'dsa' && <span className="kind-tag">DSA</span>}
+                      {it.kind === 'custom' && <span className="kind-tag">Mine</span>}
                       {it.label}
                     </span>
                   </label>
@@ -199,6 +202,14 @@ export default function Overview() {
               All follow-ups →
             </Link>
           </div>
+          {reviewsDue > 0 && (
+            <div className="row" style={{ marginBottom: 10 }}>
+              <span className="pill accent">⟳ {plural(reviewsDue, 'DSA problem')} due for review</span>
+              <Link to="/dsa" className="small">
+                Review →
+              </Link>
+            </div>
+          )}
           {dueSoon.length === 0 ? (
             <EmptyState>No open follow-ups. Add questions, blockers, or things to revisit.</EmptyState>
           ) : (
@@ -223,6 +234,14 @@ export default function Overview() {
             </ul>
           )}
         </div>
+      </div>
+
+      <div className="card" style={{ marginTop: 14 }}>
+        <div className="card-head">
+          <h2>Activity · last 26 weeks</h2>
+          <span className="small muted">Logged time, ticked tasks, closed follow-ups, solved problems</span>
+        </div>
+        <ActivityHeatmap minutesByDay={minutesByDay(data)} activeDays={activeDays(data)} />
       </div>
 
       <div className="grid-2" style={{ marginTop: 14 }}>

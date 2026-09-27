@@ -17,12 +17,16 @@ pnpm preview    # serve the production build
 ## What it does
 
 - **Overview**: current week and phase, on-track pace versus a linear schedule, hours this week against your target, streak, phase progress, this week's checklist, follow-ups due, hours-per-week chart, side project status.
-- **Weekly checklist**: all 36 weeks grouped by phase. Each week has its tasks and DSA item as checkboxes, notes, a quick time log, and follow-ups linked to that week. Weeks can be skipped.
+- **Weekly checklist**: all 36 weeks grouped by phase. Each week has its roadmap tasks and DSA item as checkboxes, plus your own tasks, notes, a quick time log, follow-ups linked to that week, and a retrospective (1–5 rating, what went well, what to improve). Weeks can be skipped.
+- **Focus timer**: start/stop in the sidebar; stopping logs the session to the study log. Optional 25-minute Pomodoro alert.
+- **Activity heatmap**: GitHub-style calendar of the last 26 weeks on the Overview.
 - **Study log**: sessions with date, hours, type, roadmap week, and note. Totals and a 12-week chart.
 - **Follow-ups**: questions, blockers, and things to revisit, with due dates, priority, and a linked week. Overdue items are flagged, and can be snoozed a week.
+- **DSA problems**: track problems with difficulty, topic, and week. Solved problems come back for review on a spaced schedule (1, 3, 7, 14, 30 days); due reviews show in the sidebar badge and on the Overview.
 - **Side projects**: the four portfolio projects with status, repo link, milestones (from the roadmap plus your own), and notes.
 - **Resources**: Boot.dev courses and the four books with status, progress, and notes.
-- **Settings**: plan start date, weekly hour target, JSON export/import, reset.
+- **Settings**: plan start date, weekly hour target, cloud sync, JSON export/import, reset.
+- **Theme**: the button beside the app name cycles auto / light / dark (per device, not synced).
 
 ## Data and multi-device sync
 

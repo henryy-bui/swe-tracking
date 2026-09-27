@@ -3,8 +3,8 @@
    - On every local change: debounced push.
    - Realtime subscription + tab focus: pull newer remote versions. */
 import { create } from 'zustand';
-import type { RealtimeChannel, Session, User } from '@supabase/supabase-js';
-import { supabase, isCloudConfigured, TABLE } from '@/lib/supabase';
+import type { RealtimeChannel, Session, SupabaseClient, User } from '@supabase/supabase-js';
+import { getSupabase, isCloudConfigured, TABLE } from '@/lib/supabase';
 import { pickData, useStore, type AppData } from '@/store/useStore';
 
 export type SyncStatus = 'disabled' | 'signed-out' | 'syncing' | 'synced' | 'offline' | 'error';
@@ -29,6 +29,7 @@ const setSync = (patch: Partial<SyncState>) => useSync.setState(patch);
 
 const ts = (iso: string | null | undefined): number => (iso ? Date.parse(iso) || 0 : 0);
 
+let supabase: SupabaseClient | null = null; // set by initSync once the client library has loaded
 let pushTimer: ReturnType<typeof setTimeout> | null = null;
 let channel: RealtimeChannel | null = null;
 let applyingRemote = false;
@@ -141,38 +142,45 @@ const onSession = (session: Session | null) => {
 
 /* Call once at app start. Safe to call when cloud is not configured. */
 export const initSync = (): void => {
-  if (!supabase || started) return;
+  const loading = getSupabase();
+  if (!loading || started) return;
   started = true;
 
-  // Fires INITIAL_SESSION on load, then SIGNED_IN / SIGNED_OUT as they happen.
-  supabase.auth.onAuthStateChange((event, session) => {
-    if (event === 'TOKEN_REFRESHED') return; // same user, nothing to reconcile
-    onSession(session);
-  });
+  void loading.then((client) => {
+    supabase = client;
 
-  useStore.subscribe((s, prev) => {
-    if (applyingRemote) return;
-    if (s.updatedAt !== prev.updatedAt) schedulePush();
-  });
-
-  if (typeof window !== 'undefined') {
-    window.addEventListener('online', () => void syncNow());
-    document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible') void syncNow();
+    // Fires INITIAL_SESSION on load, then SIGNED_IN / SIGNED_OUT as they happen.
+    client.auth.onAuthStateChange((event, session) => {
+      if (event === 'TOKEN_REFRESHED') return; // same user, nothing to reconcile
+      onSession(session);
     });
-  }
+
+    useStore.subscribe((s, prev) => {
+      if (applyingRemote) return;
+      if (s.updatedAt !== prev.updatedAt) schedulePush();
+    });
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('online', () => void syncNow());
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') void syncNow();
+      });
+    }
+  });
 };
 
 /* ---- Auth helpers used by the Settings page ---- */
 
+const NOT_READY = 'Cloud sync is not configured.';
+
 export const signInWithPassword = async (email: string, password: string): Promise<string | null> => {
-  if (!supabase) return 'Cloud sync is not configured.';
+  if (!supabase) return NOT_READY;
   const { error } = await supabase.auth.signInWithPassword({ email, password });
   return error ? error.message : null;
 };
 
 export const signUpWithPassword = async (email: string, password: string): Promise<string | null> => {
-  if (!supabase) return 'Cloud sync is not configured.';
+  if (!supabase) return NOT_READY;
   const { data, error } = await supabase.auth.signUp({ email, password });
   if (error) return error.message;
   if (data.session) return null;
@@ -180,7 +188,7 @@ export const signUpWithPassword = async (email: string, password: string): Promi
 };
 
 export const signInWithMagicLink = async (email: string): Promise<string | null> => {
-  if (!supabase) return 'Cloud sync is not configured.';
+  if (!supabase) return NOT_READY;
   const { error } = await supabase.auth.signInWithOtp({ email, options: { emailRedirectTo: window.location.origin + window.location.pathname } });
   return error ? error.message : 'Magic link sent. Open it on this device to sign in.';
 };

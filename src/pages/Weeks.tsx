@@ -54,6 +54,7 @@ export default function Weeks() {
                 const wp = weekProgress(data, w.week);
                 const st = weekStatus(data, w.week);
                 const r = weekRange(data, w.week);
+                const rating = data.retros?.[String(w.week)]?.rating ?? 0;
                 return (
                   <Link key={w.week} to={`/weeks/${w.week}`} className={`week-row${cw === w.week ? ' current' : ''}`}>
                     <div className="num">
@@ -76,7 +77,14 @@ export default function Weeks() {
                       </div>
                     </div>
                     <div className="right">
-                      <StatusPill status={st} />
+                      <span className="row" style={{ gap: 6 }}>
+                        {rating > 0 && (
+                          <span className="stars" aria-label={`Rated ${rating} of 5`}>
+                            {'★'.repeat(rating)}
+                          </span>
+                        )}
+                        <StatusPill status={st} />
+                      </span>
                       <ProgressBar done={wp.done} total={wp.total} thin label={`Week ${w.week}: ${wp.done} of ${wp.total} done`} />
                     </div>
                   </Link>

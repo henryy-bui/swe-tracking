@@ -1,6 +1,6 @@
 /* Read-only computations over roadmap + persisted data. */
 import { PHASES, PROJECTS, TOTAL_WEEKS, phaseById, projectById, weekDef, type ProjectId } from '@/data/roadmap';
-import type { AppData, FollowUp, ProjectMark, ProjectMilestone, ResourceMark } from '@/store/useStore';
+import type { AppData, FollowUp, Problem, ProjectMark, ProjectMilestone, ResourceMark } from '@/store/useStore';
 import { addDays, clamp, diffDays, today, weekStart } from '@/lib/date';
 
 export type WeekStatus = 'done' | 'in-progress' | 'not-started' | 'skipped';
@@ -8,17 +8,20 @@ export type WeekStatus = 'done' | 'in-progress' | 'not-started' | 'skipped';
 export interface TaskItem {
   key: string;
   label: string;
-  kind: 'task' | 'dsa';
+  kind: 'task' | 'dsa' | 'custom';
+  customId?: string;
 }
 
 export const taskKey = (week: number, i: number) => `w${week}-${i}`;
 export const dsaKey = (week: number) => `w${week}-dsa`;
+export const customKey = (week: number, id: string) => `w${week}-c${id}`;
 
-/* All checkable items of a week, in display order. */
-export const taskItems = (week: number): TaskItem[] => {
+/* All checkable items of a week, in display order: roadmap tasks, DSA, then the user's own tasks. */
+export const taskItems = (data: AppData, week: number): TaskItem[] => {
   const w = weekDef(week);
   const items: TaskItem[] = w.tasks.map((label, i) => ({ key: taskKey(week, i), label, kind: 'task' }));
   items.push({ key: dsaKey(week), label: w.dsa, kind: 'dsa' });
+  for (const c of data.customTasks?.[String(week)] ?? []) items.push({ key: customKey(week, c.id), label: c.title, kind: 'custom', customId: c.id });
   return items;
 };
 
@@ -30,7 +33,7 @@ export interface Progress {
 }
 
 export const weekProgress = (data: AppData, week: number): Progress => {
-  const items = taskItems(week);
+  const items = taskItems(data, week);
   return { done: items.filter((it) => isDone(data, it.key)).length, total: items.length };
 };
 
@@ -155,13 +158,40 @@ export const minutesForRoadmapWeek = (data: AppData, week: number): number =>
 
 export const totalMinutes = (data: AppData): number => data.logs.reduce((s, l) => s + (Number(l.minutes) || 0), 0);
 
-/* Dates with any activity: a log entry, a task completion, or a closed follow-up. */
+/* Dates with any activity: a log entry, a task completion, a closed follow-up, or a solved problem. */
 export const activeDays = (data: AppData): Set<string> => {
   const set = new Set<string>();
   data.logs.forEach((l) => set.add(l.date));
   Object.values(data.tasks).forEach((t) => t.done && t.at && set.add(t.at));
   data.followUps.forEach((f) => f.doneAt && set.add(f.doneAt));
+  (data.problems ?? []).forEach((p) => p.solvedAt && set.add(p.solvedAt));
   return set;
+};
+
+/* Minutes logged per day. */
+export const minutesByDay = (data: AppData): Map<string, number> => {
+  const map = new Map<string, number>();
+  for (const l of data.logs) map.set(l.date, (map.get(l.date) ?? 0) + (Number(l.minutes) || 0));
+  return map;
+};
+
+/* ---- DSA problems ---- */
+
+export const isReviewDue = (p: Problem): boolean => p.status === 'solved' && !!p.nextReview && p.nextReview <= today();
+
+export const dueProblems = (data: AppData): Problem[] => (data.problems ?? []).filter(isReviewDue);
+
+export const problemStats = (data: AppData) => {
+  const list = data.problems ?? [];
+  const solved = list.filter((p) => p.status === 'solved');
+  return {
+    total: list.length,
+    solved: solved.length,
+    easy: solved.filter((p) => p.difficulty === 'easy').length,
+    medium: solved.filter((p) => p.difficulty === 'medium').length,
+    hard: solved.filter((p) => p.difficulty === 'hard').length,
+    due: list.filter(isReviewDue).length,
+  };
 };
 
 /* Consecutive active days ending today, or yesterday so the streak survives until the day ends. */

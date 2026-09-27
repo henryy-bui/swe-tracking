@@ -59,16 +59,52 @@ export interface ProjectMark {
   milestones: ProjectMilestone[];
 }
 
+export interface CustomTask {
+  id: string;
+  title: string;
+}
+
+export type Difficulty = 'easy' | 'medium' | 'hard';
+export const DIFFICULTIES: Difficulty[] = ['easy', 'medium', 'hard'];
+
+export interface Problem {
+  id: string;
+  title: string;
+  url: string;
+  difficulty: Difficulty;
+  topic: string;
+  week?: number;
+  status: 'todo' | 'solved';
+  solvedAt?: string;
+  reviewCount: number;
+  nextReview?: string; // spaced-repetition due date
+  note: string;
+  createdAt: string;
+}
+
+/* Days until the next review after each successful review: 1, 3, 7, 14, 30, then 30 again. */
+export const REVIEW_INTERVALS = [1, 3, 7, 14, 30];
+
+export interface Retro {
+  rating: number; // 1-5, 0 = unset
+  wentWell: string;
+  improve: string;
+  at: string;
+}
+
 export interface AppData {
   version: number;
   updatedAt: string | null; // ISO timestamp of the last local change; drives cloud sync
   startDate: string | null;
   weeklyTargetHours: number;
   tasks: Record<string, TaskMark>;
+  customTasks: Record<string, CustomTask[]>; // by week
   weekNotes: Record<string, string>;
   weekStatus: Record<string, 'skipped'>;
+  retros: Record<string, Retro>; // by week
   logs: LogEntry[];
   followUps: FollowUp[];
+  problems: Problem[];
   resources: Record<string, Partial<ResourceMark>>;
   projects: Record<string, Partial<ProjectMark>>;
 }
@@ -82,10 +118,13 @@ export const defaultData = (): AppData => ({
   startDate: null,
   weeklyTargetHours: 10,
   tasks: {},
+  customTasks: {},
   weekNotes: {},
   weekStatus: {},
+  retros: {},
   logs: [],
   followUps: [],
+  problems: [],
   resources: {},
   projects: {},
 });
@@ -106,10 +145,10 @@ export const validateImport = (obj: unknown): string | null => {
     return `File version ${o.version} is newer than this app (version ${DATA_VERSION}).`;
   }
   if (o.startDate !== undefined && o.startDate !== null && !isValidISODate(o.startDate)) return 'startDate is not a valid date.';
-  for (const k of ['logs', 'followUps'] as const) {
+  for (const k of ['logs', 'followUps', 'problems'] as const) {
     if (o[k] !== undefined && !Array.isArray(o[k])) return `Field "${k}" must be an array.`;
   }
-  for (const k of ['tasks', 'weekNotes', 'weekStatus', 'resources', 'projects'] as const) {
+  for (const k of ['tasks', 'customTasks', 'weekNotes', 'weekStatus', 'retros', 'resources', 'projects'] as const) {
     if (o[k] !== undefined && (typeof o[k] !== 'object' || o[k] === null || Array.isArray(o[k]))) return `Field "${k}" must be an object.`;
   }
   const known = DATA_KEYS.some((k) => k in o && k !== 'version' && k !== 'updatedAt');
@@ -127,6 +166,16 @@ export interface Actions {
   setWeekTasks: (week: number, keys: string[], done: boolean) => void;
   setWeekNote: (week: number, text: string) => void;
   toggleSkipWeek: (week: number) => void;
+  addCustomTask: (week: number, title: string) => void;
+  deleteCustomTask: (week: number, id: string) => void;
+  setRetro: (week: number, patch: Partial<Omit<Retro, 'at'>>) => void;
+
+  addProblem: (p: Omit<Problem, 'id' | 'createdAt' | 'status' | 'reviewCount'>) => void;
+  updateProblem: (id: string, patch: Partial<Omit<Problem, 'id'>>) => void;
+  deleteProblem: (id: string) => void;
+  markProblemSolved: (id: string) => void;
+  markProblemReviewed: (id: string) => void;
+  resetProblem: (id: string) => void;
 
   addLog: (entry: Omit<LogEntry, 'id' | 'createdAt'>) => void;
   deleteLog: (id: string) => void;
@@ -204,6 +253,50 @@ export const useStore = create<StoreState>()(
             else weekStatus[k] = 'skipped';
             return { weekStatus };
           }),
+
+        addCustomTask: (week, title) =>
+          set((s) => ({
+            customTasks: { ...s.customTasks, [String(week)]: [...(s.customTasks[String(week)] ?? []), { id: uid(), title }] },
+          })),
+        deleteCustomTask: (week, id) =>
+          set((s) => {
+            const tasks = { ...s.tasks };
+            delete tasks[`w${week}-c${id}`];
+            const list = (s.customTasks[String(week)] ?? []).filter((t) => t.id !== id);
+            const customTasks = { ...s.customTasks };
+            if (list.length) customTasks[String(week)] = list;
+            else delete customTasks[String(week)];
+            return { tasks, customTasks };
+          }),
+        setRetro: (week, patch) =>
+          set((s) => {
+            const prev = s.retros[String(week)] ?? { rating: 0, wentWell: '', improve: '', at: today() };
+            return { retros: { ...s.retros, [String(week)]: { ...prev, ...patch, at: today() } } };
+          }),
+
+        addProblem: (p) =>
+          set((s) => ({ problems: [{ ...p, id: uid(), status: 'todo', reviewCount: 0, createdAt: new Date().toISOString() }, ...s.problems] })),
+        updateProblem: (id, patch) => set((s) => ({ problems: s.problems.map((p) => (p.id === id ? { ...p, ...patch } : p)) })),
+        deleteProblem: (id) => set((s) => ({ problems: s.problems.filter((p) => p.id !== id) })),
+        markProblemSolved: (id) =>
+          set((s) => ({
+            problems: s.problems.map((p) =>
+              p.id === id ? { ...p, status: 'solved', solvedAt: today(), reviewCount: 0, nextReview: addDays(today(), REVIEW_INTERVALS[0]) } : p,
+            ),
+          })),
+        markProblemReviewed: (id) =>
+          set((s) => ({
+            problems: s.problems.map((p) => {
+              if (p.id !== id) return p;
+              const count = p.reviewCount + 1;
+              const days = REVIEW_INTERVALS[Math.min(count, REVIEW_INTERVALS.length - 1)];
+              return { ...p, reviewCount: count, nextReview: addDays(today(), days) };
+            }),
+          })),
+        resetProblem: (id) =>
+          set((s) => ({
+            problems: s.problems.map((p) => (p.id === id ? { ...p, status: 'todo', solvedAt: undefined, reviewCount: 0, nextReview: undefined } : p)),
+          })),
 
         addLog: (entry) => set((s) => ({ logs: [{ ...entry, id: uid(), createdAt: new Date().toISOString() }, ...s.logs] })),
         deleteLog: (id) => set((s) => ({ logs: s.logs.filter((l) => l.id !== id) })),
