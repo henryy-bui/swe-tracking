@@ -91,6 +91,7 @@ export interface Retro {
   rating: number; // 1-5, 0 = unset
   wentWell: string;
   improve: string;
+  plan?: string; // intention for the following week, shown on that week's page and on Today
   at: string;
 }
 
@@ -185,6 +186,14 @@ export interface Actions {
   setRetro: (week: number, patch: Partial<Omit<Retro, 'at'>>) => void;
 
   addProblem: (p: Omit<Problem, 'id' | 'createdAt' | 'status' | 'reviewCount'>) => void;
+  addProblems: (list: Omit<Problem, 'id' | 'createdAt' | 'status' | 'reviewCount'>[]) => void;
+
+  /* Put back something that was just deleted (Undo). */
+  restoreLog: (entry: LogEntry) => void;
+  restoreFollowUp: (f: FollowUp) => void;
+  restoreProblem: (p: Problem) => void;
+  restoreCustomTask: (week: number, task: CustomTask, mark?: TaskMark) => void;
+  restoreMilestone: (projectId: ProjectId, m: ProjectMilestone) => void;
   updateProblem: (id: string, patch: Partial<Omit<Problem, 'id'>>) => void;
   deleteProblem: (id: string) => void;
   markProblemSolved: (id: string) => void;
@@ -290,6 +299,27 @@ export const useStore = create<StoreState>()(
 
         addProblem: (p) =>
           set((s) => ({ problems: [{ ...p, id: uid(), status: 'todo', reviewCount: 0, createdAt: new Date().toISOString() }, ...s.problems] })),
+        addProblems: (list) =>
+          set((s) => ({
+            problems: [...list.map((p, i) => ({ ...p, id: uid() + i.toString(36), status: 'todo' as const, reviewCount: 0, createdAt: new Date().toISOString() })), ...s.problems],
+          })),
+
+        restoreLog: (entry) => set((s) => ({ logs: [entry, ...s.logs.filter((l) => l.id !== entry.id)] })),
+        restoreFollowUp: (f) => set((s) => ({ followUps: [f, ...s.followUps.filter((x) => x.id !== f.id)] })),
+        restoreProblem: (p) => set((s) => ({ problems: [p, ...s.problems.filter((x) => x.id !== p.id)] })),
+        restoreCustomTask: (week, task, mark) =>
+          set((s) => {
+            const list = [...(s.customTasks[String(week)] ?? []).filter((t) => t.id !== task.id), task];
+            const tasks = { ...s.tasks };
+            if (mark) tasks[customKey(week, task.id)] = mark;
+            return { customTasks: { ...s.customTasks, [String(week)]: list }, tasks };
+          }),
+        restoreMilestone: (projectId, m) =>
+          set((s) => {
+            const saved = s.projects[projectId] ?? {};
+            const list = [...(saved.milestones ?? []).filter((x) => x.id !== m.id), m];
+            return { projects: { ...s.projects, [projectId]: { ...saved, milestones: list } } };
+          }),
         updateProblem: (id, patch) => set((s) => ({ problems: s.problems.map((p) => (p.id === id ? { ...p, ...patch } : p)) })),
         deleteProblem: (id) => set((s) => ({ problems: s.problems.filter((p) => p.id !== id) })),
         markProblemSolved: (id) =>

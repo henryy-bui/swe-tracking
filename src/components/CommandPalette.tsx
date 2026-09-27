@@ -172,7 +172,8 @@ export function CommandPalette() {
             <kbd className="kbd">esc</kbd> close
           </span>
           <span>
-            <kbd className="kbd">g</kbd> then a letter jumps to a page: <kbd className="kbd">o</kbd> overview <kbd className="kbd">w</kbd> weeks <kbd className="kbd">l</kbd> log{' '}
+            <kbd className="kbd">g</kbd> then a letter jumps to a page: <kbd className="kbd">t</kbd> today <kbd className="kbd">o</kbd> overview <kbd className="kbd">w</kbd> weeks{' '}
+            <kbd className="kbd">l</kbd> log{' '}
             <kbd className="kbd">f</kbd> follow-ups <kbd className="kbd">d</kbd> DSA <kbd className="kbd">p</kbd> projects <kbd className="kbd">r</kbd> resources <kbd className="kbd">m</kbd>{' '}
             achievements <kbd className="kbd">s</kbd> settings
           </span>

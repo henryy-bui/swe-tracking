@@ -39,6 +39,7 @@ export const weekSummaryMarkdown = (data: AppData, week: number): string => {
     if (retro.rating) md += line(`Rating: ${stars(retro.rating)} ${RATING_LABEL[retro.rating]}`);
     if (retro.wentWell) md += line(`**Went well:** ${retro.wentWell}`);
     if (retro.improve) md += line(`**Improve:** ${retro.improve}`);
+    if (retro.plan) md += line(`**Plan for next week:** ${retro.plan}`);
   }
   if (note) {
     md += line();

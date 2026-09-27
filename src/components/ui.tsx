@@ -14,18 +14,30 @@ export { toast } from '@/store/toast';
 /* ---------- Toast (always-mounted live region so screen readers announce it) ---------- */
 export function Toast() {
   const message = useToastStore((s) => s.message);
+  const action = useToastStore((s) => s.action);
   const seq = useToastStore((s) => s.seq);
   const clear = useToastStore((s) => s.clear);
   useEffect(() => {
     if (!message) return;
-    const t = setTimeout(clear, 3200);
+    const t = setTimeout(clear, action ? 7000 : 3200);
     return () => clearTimeout(t);
-  }, [message, seq, clear]);
+  }, [message, action, seq, clear]);
   return (
     <div className="toast-region" role="status" aria-live="polite">
       {message && (
         <div className="toast" key={seq}>
-          {message}
+          <span>{message}</span>
+          {action && (
+            <button
+              className="toast-action"
+              onClick={() => {
+                action.onClick();
+                clear();
+              }}
+            >
+              {action.label}
+            </button>
+          )}
         </div>
       )}
     </div>

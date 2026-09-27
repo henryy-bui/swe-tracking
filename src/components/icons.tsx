@@ -65,6 +65,7 @@ export const TrendingUp = make('trending-up', ['m3 17 6-6 4 4 8-8', 'M14 7h7v7']
 export const TrendingDown = make('trending-down', ['m3 7 6 6 4-4 8 8', 'M14 17h7v-7']);
 export const Target = make('target', ['M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z', 'M12 17a5 5 0 1 0 0-10 5 5 0 0 0 0 10Z', 'M12 13a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z']);
 export const Menu = make('menu', ['M4 7h16', 'M4 12h16', 'M4 17h16']);
+export const CalendarCheck = make('calendar-check', ['M4 6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6Z', 'M16 2v4', 'M8 2v4', 'M4 10h16', 'm9 15 2 2 4-4']);
 export const Search = make('search', ['M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14Z', 'm20 20-4-4']);
 export const Trophy = make('trophy', ['M8 21h8', 'M12 17v4', 'M7 4h10v5a5 5 0 0 1-10 0V4Z', 'M7 6H4v2a3 3 0 0 0 3 3', 'M17 6h3v2a3 3 0 0 1-3 3']);
 export const Copy = make('copy', ['M9 9h10v11H9z', 'M5 15V4h10']);

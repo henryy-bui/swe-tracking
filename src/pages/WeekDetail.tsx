@@ -10,6 +10,7 @@ import { useDraft } from '@/lib/useDraft';
 import { rovingKey } from '@/lib/useA11y';
 import { downloadText } from '@/lib/download';
 import { weekSummaryMarkdown } from '@/lib/report';
+import { deleteLogWithUndo } from '@/lib/undo';
 import { EmptyState, MilestoneBadge, MoreLink, PageHead, ProgressBar, Stars, StatusPill, toast } from '@/components/ui';
 import { TaskChecklist } from '@/components/TaskChecklist';
 import { LogSessionForm } from '@/components/LogSessionForm';
@@ -142,6 +143,13 @@ function WeekChecklistCard({ data, week }: { data: AppData; week: number }) {
         </span>
       </div>
       <ProgressBar done={wp.done} total={wp.total} label="Week progress" valueText={`${wp.done} of ${wp.total} ${TERMS.tasks} done`} />
+      {week > 1 && data.retros[String(week - 1)]?.plan && (
+        <div className="callout section-sm">
+          <div className="callout-title">Your plan for this week</div>
+          <div className="small">{data.retros[String(week - 1)]!.plan}</div>
+          <div className="hint">Written in last week's retrospective.</div>
+        </div>
+      )}
       {def.milestone && (
         <div className="section-sm">
           <MilestoneBadge milestone={def.milestone} />{' '}
@@ -233,6 +241,10 @@ function WeekRetroCard({ data, week }: { data: AppData; week: number }) {
     setRetro(week, { improve: v });
     toast('Retrospective saved.');
   });
+  const [plan, setPlan, commitPlan] = useDraft(retro?.plan ?? '', (v) => {
+    setRetro(week, { plan: v });
+    toast(week < TOTAL_WEEKS ? `Plan saved. It shows on week ${week + 1} and on Today.` : 'Plan saved.');
+  });
   const rating = retro?.rating ?? 0;
   return (
     <div className="card">
@@ -261,6 +273,19 @@ function WeekRetroCard({ data, week }: { data: AppData; week: number }) {
           <textarea id={`${id}-improve`} rows={3} value={improve} onChange={(e) => setImprove(e.target.value)} onBlur={commitImprove} />
         </div>
       </div>
+      {week < TOTAL_WEEKS && (
+        <div className="field section-sm">
+          <label htmlFor={`${id}-plan`}>Plan for next week</label>
+          <textarea
+            id={`${id}-plan`}
+            rows={2}
+            value={plan}
+            onChange={(e) => setPlan(e.target.value)}
+            onBlur={commitPlan}
+            placeholder={`One or two intentions for week ${week + 1}. They show up at the top of that week and on Today.`}
+          />
+        </div>
+      )}
     </div>
   );
 }
@@ -290,7 +315,6 @@ function WeekFollowUpsCard({ data, week }: { data: AppData; week: number }) {
 }
 
 function WeekSessionsCard({ data, week }: { data: AppData; week: number }) {
-  const deleteLog = useStore((s) => s.deleteLog);
   const sessions = sessionsForWeek(data, week);
   const minutes = sessions.reduce((s, l) => s + l.minutes, 0);
   return (
@@ -304,16 +328,7 @@ function WeekSessionsCard({ data, week }: { data: AppData; week: number }) {
       ) : (
         <ul className="list">
           {sessions.map((l) => (
-            <SessionRow
-              key={l.id}
-              log={l}
-              showDate
-              onDelete={() => {
-                if (!window.confirm(`Delete this ${fmtHours(l.minutes)} session?`)) return;
-                deleteLog(l.id);
-                toast('Session deleted.');
-              }}
-            />
+            <SessionRow key={l.id} log={l} showDate onDelete={() => deleteLogWithUndo(l)} />
           ))}
         </ul>
       )}

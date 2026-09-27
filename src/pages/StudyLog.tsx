@@ -4,7 +4,8 @@ import { useStore, type LogTag } from '@/store/useStore';
 import { minutesByCalendarWeek, minutesThisWeek, totalMinutes } from '@/lib/derive';
 import { fmtDateLong, weekStart } from '@/lib/date';
 import { fmtHours, pct, plural } from '@/lib/format';
-import { EmptyState, PageHead, StatTile, toast } from '@/components/ui';
+import { deleteLogWithUndo } from '@/lib/undo';
+import { EmptyState, PageHead, StatTile } from '@/components/ui';
 import { WeeklyHoursChart } from '@/components/WeeklyHoursChart';
 import { LogSessionForm } from '@/components/LogSessionForm';
 import { SessionRow } from '@/components/SessionRow';
@@ -12,7 +13,6 @@ import { LogTagSelect } from '@/components/fields';
 
 export default function StudyLog() {
   const data = useStore();
-  const deleteLog = useStore((s) => s.deleteLog);
   const [filter, setFilter] = useState<'all' | LogTag>('all');
 
   const total = totalMinutes(data);
@@ -89,16 +89,7 @@ export default function StudyLog() {
                 </div>
                 <ul className="list">
                   {entries.map((l) => (
-                    <SessionRow
-                      key={l.id}
-                      log={l}
-                      showWeek
-                      onDelete={() => {
-                        if (!window.confirm(`Delete this ${fmtHours(l.minutes)} session?`)) return;
-                        deleteLog(l.id);
-                        toast('Session deleted.');
-                      }}
-                    />
+                    <SessionRow key={l.id} log={l} showWeek onDelete={() => deleteLogWithUndo(l)} />
                   ))}
                 </ul>
               </div>

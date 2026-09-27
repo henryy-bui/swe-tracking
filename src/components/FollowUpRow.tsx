@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useStore, type FollowUp } from '@/store/useStore';
 import { fmtDate } from '@/lib/date';
+import { deleteFollowUpWithUndo } from '@/lib/undo';
 import { DueLabel, PriorityPill, WeekLink, toast } from '@/components/ui';
 import { InlineNoteEditor } from '@/components/InlineNoteEditor';
 import { X } from '@/components/icons';
@@ -14,15 +15,9 @@ interface Props {
 export function FollowUpRow({ f, showWeek, compact }: Props) {
   const toggleFollowUp = useStore((s) => s.toggleFollowUp);
   const snoozeFollowUp = useStore((s) => s.snoozeFollowUp);
-  const deleteFollowUp = useStore((s) => s.deleteFollowUp);
   const updateFollowUp = useStore((s) => s.updateFollowUp);
   const [editing, setEditing] = useState(false);
-
-  const remove = () => {
-    if (f.note && !window.confirm(`Delete "${f.title}" and its details?`)) return;
-    deleteFollowUp(f.id);
-    toast('Follow-up deleted.');
-  };
+  const remove = () => deleteFollowUpWithUndo(f);
 
   return (
     <li className={f.done ? 'done' : ''}>

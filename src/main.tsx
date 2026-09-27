@@ -9,6 +9,7 @@ import StudyLog from '@/pages/StudyLog';
 import FollowUps from '@/pages/FollowUps';
 import Problems from '@/pages/Problems';
 import Milestones from '@/pages/Milestones';
+import Today from '@/pages/Today';
 import Projects from '@/pages/Projects';
 import Resources from '@/pages/Resources';
 import Settings from '@/pages/Settings';
@@ -23,6 +24,7 @@ const router = createHashRouter([
     element: <App />,
     children: [
       { index: true, element: <Overview /> },
+      { path: 'today', element: <Today /> },
       { path: 'weeks', element: <Weeks /> },
       { path: 'weeks/:n', element: <WeekDetail /> },
       { path: 'log', element: <StudyLog /> },

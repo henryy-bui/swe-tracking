@@ -682,7 +682,7 @@ input[type='checkbox'] {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   gap: 10px 12px;
-  align-items: end;
+  align-items: start;
 }
 .form-grid .wide {
   grid-column: 1 / -1;
@@ -1156,6 +1156,10 @@ input[type='checkbox'] {
   pointer-events: none;
 }
 .toast {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  pointer-events: auto;
   background: var(--ink);
   color: var(--bg);
   padding: 9px 14px;
@@ -1164,6 +1168,39 @@ input[type='checkbox'] {
   box-shadow: var(--shadow-overlay);
   text-align: center;
   max-width: min(480px, calc(100vw - 32px));
+}
+.toast-action {
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  background: transparent;
+  color: inherit;
+  font-weight: 600;
+  font-size: 13px;
+  padding: 3px 10px;
+  border-radius: var(--radius-xs);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.toast-action:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+/* ---------- Callout (plan for the week) ---------- */
+.callout {
+  padding: 10px 12px;
+  border-left: 3px solid var(--accent);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  background: var(--surface-2);
+}
+.callout-title {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+  margin-bottom: 2px;
+}
+.today-timer .timer-widget {
+  margin: 0 0 12px;
 }
 
 /* ---------- Focus timer ---------- */

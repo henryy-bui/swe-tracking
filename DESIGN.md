@@ -93,7 +93,8 @@ Lora loads from Google Fonts with `Georgia` as fallback, so offline still render
 - **Filter groups** `.tabs`: pressed buttons (`aria-pressed`), not ARIA tabs, since there are no panels.
 - **Lists** `.list` rows with `.body`, `.meta`, `.actions`; `.checklist` for checkbox rows. Delete buttons confirm when data would be lost, and every action toasts.
 - **Empty states** `.empty`: dashed border, one sentence that says what to do, with a link to the page where you do it.
-- **Toast** `.toast` inside a permanent `role="status"` region: short feedback (saved, deleted, timer events), 3.2 s, one sentence.
+- **Toast** `.toast` inside a permanent `role="status"` region: short feedback (saved, deleted, timer events), 3.2 s, one sentence. With an action (`.toast-action`, used for Undo) it stays 7 s. Prefer delete-then-Undo over a confirm dialog for single items; confirm only for bulk or irreversible actions.
+- **Callout** `.callout`: accent left border on `--surface-2` with an uppercase `.callout-title`, for a short piece of the user's own text that deserves attention (the plan for the week).
 - **Command palette** `.palette`: centered at 12vh on desktop, full-screen with a Cancel button on phones; `role="combobox"` input, grouped `role="listbox"`, focus trapped, footer lists shortcuts.
 - **Achievements** `.milestone`: card with a round icon well; unlocked cards use the good-soft fill, locked ones a thin progress bar and `current / target`.
 - **Phone chrome**: sticky top bar `.mobile-top`, fixed `.tabbar` (5 tabs, 50px, safe-area padding, hidden while typing), and the `.sheet` dialog (focus trapped, `inert` on the rest, closes on backdrop, Escape, or navigation).

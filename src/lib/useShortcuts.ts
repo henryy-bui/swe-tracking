@@ -4,6 +4,7 @@ import { useUi } from '@/store/ui';
 import { toggleTimer } from '@/lib/session';
 
 const GO: Record<string, string> = {
+  t: '/today',
   o: '/',
   w: '/weeks',
   l: '/log',

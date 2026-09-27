@@ -34,6 +34,7 @@ const KIND_ORDER: SearchKind[] = ['action', 'page', 'week', 'task', 'followup', 
 const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 
 export const PAGES: { to: string; title: string; keywords: string }[] = [
+  { to: '/today', title: 'Today', keywords: 'today now daily due plan' },
   { to: '/', title: 'Overview', keywords: 'overview dashboard home' },
   { to: '/weeks', title: 'Weekly checklist', keywords: 'weeks checklist plan' },
   { to: '/log', title: 'Study log', keywords: 'log hours sessions time' },

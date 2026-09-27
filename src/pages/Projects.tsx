@@ -5,6 +5,7 @@ import { projectProgress, projectState, weekRange } from '@/lib/derive';
 import { fmtDate } from '@/lib/date';
 import { STATUS_LABEL } from '@/lib/labels';
 import { useDraft } from '@/lib/useDraft';
+import { deleteMilestoneWithUndo } from '@/lib/undo';
 import { PageHead, ProgressBar, StatusPill, Vi, WeekLink, toast } from '@/components/ui';
 import { X } from '@/components/icons';
 
@@ -29,7 +30,6 @@ function ProjectCard({ def }: { def: ProjectDef }) {
   const setProject = useStore((s) => s.setProject);
   const toggleMilestone = useStore((s) => s.toggleMilestone);
   const addMilestone = useStore((s) => s.addMilestone);
-  const deleteMilestone = useStore((s) => s.deleteMilestone);
   const st = projectState(data, def.id);
   const pp = projectProgress(data, def.id);
   const startRange = weekRange(data, def.weeks[0]);
@@ -112,14 +112,7 @@ function ProjectCard({ def }: { def: ProjectDef }) {
               <span>{m.custom ? m.title : <Vi>{m.title}</Vi>}</span>
             </label>
             {m.custom && (
-              <button
-                className="btn sm ghost icon"
-                onClick={() => {
-                  deleteMilestone(def.id, m.id);
-                  toast('Milestone removed.');
-                }}
-                aria-label={`Remove milestone "${m.title}"`}
-              >
+              <button className="btn sm ghost icon" onClick={() => deleteMilestoneWithUndo(def.id, m)} aria-label={`Remove milestone "${m.title}"`}>
                 <X size={14} />
               </button>
             )}

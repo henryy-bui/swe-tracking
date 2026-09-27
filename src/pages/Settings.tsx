@@ -6,9 +6,11 @@ import { addDays, fmtDateLong, fmtRange, today } from '@/lib/date';
 import { useDraft } from '@/lib/useDraft';
 import { downloadBackup, downloadText } from '@/lib/download';
 import { progressReportMarkdown } from '@/lib/report';
+import { buildIcs, countIcsEvents } from '@/lib/ics';
+import { plural } from '@/lib/format';
 import { PageHead, toast } from '@/components/ui';
 import { CloudSyncCard } from '@/components/CloudSync';
-import { Download, FileText } from '@/components/icons';
+import { CalendarCheck, Download, FileText } from '@/components/icons';
 
 const DEFAULT_TARGET = defaultData().weeklyTargetHours;
 
@@ -169,6 +171,29 @@ export default function Settings() {
               {importError.friendly}
             </p>
           )}
+        </div>
+
+        <div className="card">
+          <div className="card-head">
+            <h2>Calendar</h2>
+          </div>
+          <p className="ink-2 small">
+            Download an .ics file with every week as an all-day event (with its tasks), plus open follow-up due dates and upcoming DSA reviews. Import it into Google
+            Calendar, Apple Calendar, or Outlook. Re-download after changes; the events keep the same IDs so re-importing updates them.
+          </p>
+          <div className="row section-sm">
+            <button
+              className="btn"
+              onClick={() => {
+                const ics = buildIcs(data);
+                downloadText(`swe-roadmap-${today()}.ics`, ics, 'text/calendar');
+                toast(`Calendar file with ${plural(countIcsEvents(ics), 'event')} downloaded.`);
+              }}
+            >
+              <CalendarCheck size={15} /> Download calendar (.ics)
+            </button>
+            {!data.startDate && <span className="hint">Set a start date to include the 36 weeks.</span>}
+          </div>
         </div>
 
         <div className="card">

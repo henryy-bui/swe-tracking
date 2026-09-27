@@ -6,6 +6,7 @@ import { currentWeek, isReviewDue, problemStats } from '@/lib/derive';
 import { addDays, fmtDate, relDay, today } from '@/lib/date';
 import { plural } from '@/lib/format';
 import { DIFFICULTY_LABEL } from '@/lib/labels';
+import { deleteProblemWithUndo } from '@/lib/undo';
 import { EmptyState, PageHead, StatTile, Tabs, Vi, WeekLink, toast } from '@/components/ui';
 import { DifficultySelect, WeekSelect, dsaTopic } from '@/components/fields';
 import { InlineNoteEditor } from '@/components/InlineNoteEditor';
@@ -23,7 +24,9 @@ const EMPTY: Record<Filter, string> = {
 export default function Problems() {
   const id = useId();
   const data = useStore();
-  const { addProblem, updateProblem, deleteProblem, markProblemSolved, markProblemReviewed, resetProblem } = useStore();
+  const { addProblem, addProblems, updateProblem, markProblemSolved, markProblemReviewed, resetProblem } = useStore();
+  const [bulk, setBulk] = useState('');
+  const [bulkOpen, setBulkOpen] = useState(false);
   const cw = currentWeek(data);
   const stats = problemStats(data);
 
@@ -50,6 +53,16 @@ export default function Problems() {
     setUrl('');
     toast('Problem added to your to-do list.');
     titleRef.current?.focus();
+  };
+
+  /* One problem per line: "Title", "Title | hard", or "Title | medium | https://…". */
+  const parsedBulk = useMemo(() => parseBulk(bulk), [bulk]);
+  const submitBulk = () => {
+    if (parsedBulk.length === 0) return;
+    addProblems(parsedBulk.map((p) => ({ ...p, topic: topic.trim(), week: week ? Number(week) : undefined, note: '' })));
+    setBulk('');
+    setBulkOpen(false);
+    toast(`Added ${plural(parsedBulk.length, 'problem')} to your to-do list.`);
   };
 
   const list = useMemo(() => {
@@ -131,6 +144,34 @@ export default function Problems() {
               </button>
             </div>
           </form>
+          <div className="section-sm">
+            <button className="btn ghost sm" onClick={() => setBulkOpen((v) => !v)} aria-expanded={bulkOpen} aria-controls={`${id}-bulk`}>
+              {bulkOpen ? 'Hide bulk add' : 'Add several at once…'}
+            </button>
+          </div>
+          {bulkOpen && (
+            <div id={`${id}-bulk`} className="section-sm">
+              <div className="field">
+                <label htmlFor={`${id}-bulk-text`}>One problem per line</label>
+                <textarea
+                  id={`${id}-bulk-text`}
+                  rows={5}
+                  value={bulk}
+                  onChange={(e) => setBulk(e.target.value)}
+                  placeholder={'Two Sum\nValid Anagram | easy\n3Sum | medium | https://leetcode.com/problems/3sum/'}
+                  aria-describedby={`${id}-bulk-hint`}
+                />
+                <span id={`${id}-bulk-hint`} className="hint">
+                  Optional after the title: difficulty (easy, medium, hard) and a link, separated by |. The week and topic above apply to all of them.
+                </span>
+              </div>
+              <div className="form-actions section-xs">
+                <button className="btn primary" onClick={submitBulk} disabled={parsedBulk.length === 0}>
+                  Add {parsedBulk.length > 0 ? plural(parsedBulk.length, 'problem') : 'problems'}
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="card">
@@ -173,11 +214,7 @@ export default function Problems() {
                     resetProblem(p.id);
                     toast('Moved back to to-do.');
                   }}
-                  onDelete={() => {
-                    if (!window.confirm(`Delete "${p.title}" and its review history?`)) return;
-                    deleteProblem(p.id);
-                    toast('Problem deleted.');
-                  }}
+                  onDelete={() => deleteProblemWithUndo(p)}
                 />
               ))}
             </ul>
@@ -187,6 +224,25 @@ export default function Problems() {
     </>
   );
 }
+
+export const parseBulk = (text: string): { title: string; difficulty: Difficulty; url: string }[] =>
+  text
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter(Boolean)
+    .map((l) => {
+      const parts = l.split('|').map((s) => s.trim());
+      const title = parts[0];
+      let difficulty: Difficulty = 'medium';
+      let url = '';
+      for (const p of parts.slice(1)) {
+        const low = p.toLowerCase();
+        if (low === 'easy' || low === 'medium' || low === 'hard') difficulty = low;
+        else if (/^https?:\/\//i.test(p)) url = p;
+      }
+      return { title, difficulty, url };
+    })
+    .filter((p) => p.title.length > 0);
 
 interface RowProps {
   p: Problem;

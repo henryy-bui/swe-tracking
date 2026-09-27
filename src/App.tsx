@@ -14,7 +14,7 @@ import { SyncIndicator } from '@/components/CloudSync';
 import { FocusTimer } from '@/components/FocusTimer';
 import { CommandPalette } from '@/components/CommandPalette';
 import {
-  BookOpen, Braces, Clock, Flag, FolderKanban, LayoutDashboard, ListChecks, Menu, Monitor, Moon, Search, Settings, Sun, Trophy, X, type IconProps,
+  BookOpen, Braces, CalendarCheck, Clock, Flag, FolderKanban, LayoutDashboard, ListChecks, Menu, Monitor, Moon, Search, Settings, Sun, Trophy, X, type IconProps,
 } from '@/components/icons';
 
 type IconComponent = (props: IconProps) => JSX.Element;
@@ -29,10 +29,11 @@ interface NavItem {
 }
 
 const NAV: NavItem[] = [
+  { to: '/today', label: 'Today', short: 'Today', icon: CalendarCheck, primary: true },
   { to: '/', label: 'Overview', short: 'Overview', icon: LayoutDashboard, end: true, primary: true },
   { to: '/weeks', label: 'Weekly checklist', short: 'Weeks', icon: ListChecks, primary: true },
-  { to: '/log', label: 'Study log', short: 'Log', icon: Clock, primary: true },
   { to: '/followups', label: 'Follow-ups', short: 'Follow-ups', icon: Flag, primary: true },
+  { to: '/log', label: 'Study log', short: 'Log', icon: Clock },
   { to: '/dsa', label: 'DSA problems', short: 'DSA', icon: Braces },
   { to: '/projects', label: 'Side projects', short: 'Projects', icon: FolderKanban },
   { to: '/resources', label: 'Resources', short: 'Resources', icon: BookOpen },
