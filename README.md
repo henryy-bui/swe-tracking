@@ -48,6 +48,10 @@ How sync behaves:
 
 When the env vars are absent, the Cloud sync card explains the setup and everything stays local.
 
+## On a phone
+
+The layout switches to a bottom tab bar and a "More" sheet under 860px. Open the deployed URL in Safari or Chrome and use "Add to Home Screen" to install it as a standalone app; the icon comes from `public/apple-touch-icon.png` (regenerate with `node scripts/make-touch-icon.mjs`).
+
 ## Design
 
 Colors, type, spacing, component rules, and the icon set are documented in `DESIGN.md`. Use its tokens and classes when adding UI.

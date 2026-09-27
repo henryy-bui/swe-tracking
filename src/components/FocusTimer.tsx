@@ -16,23 +16,22 @@ const fmtClock = (ms: number) => {
   return h > 0 ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
 };
 
-/* Sidebar focus timer. Stopping opens a tiny form that logs the session to the study log. */
-export function FocusTimer() {
-  const { startedAt, pomodoro, alerted, start, stop, setPomodoro, setAlerted } = useTimer();
-  const addLog = useStore((s) => s.addLog);
-  const data = useStore();
+/* Ticks once a second while the timer runs. */
+const useElapsed = (startedAt: number | null) => {
   const [now, setNow] = useState(Date.now());
-  const [draft, setDraft] = useState<{ minutes: number; tag: LogTag; note: string } | null>(null);
-
   useEffect(() => {
     if (!startedAt) return;
+    setNow(Date.now());
     const id = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(id);
   }, [startedAt]);
+  return startedAt ? now - startedAt : 0;
+};
 
-  const elapsed = startedAt ? now - startedAt : 0;
+/* Fires the Pomodoro alert once per session. */
+const usePomodoroAlert = (elapsed: number) => {
+  const { pomodoro, alerted, setAlerted } = useTimer();
   const reached = pomodoro && elapsed >= POMODORO_MINUTES * 60000;
-
   useEffect(() => {
     if (reached && !alerted) {
       setAlerted();
@@ -40,6 +39,26 @@ export function FocusTimer() {
       toast(`${POMODORO_MINUTES} minutes of focus. Take a break or keep going.`);
     }
   }, [reached, alerted, setAlerted]);
+  return reached;
+};
+
+interface Props {
+  /* Top-bar chip: start/stop only; stopping logs straight away as "study". */
+  compact?: boolean;
+}
+
+export function FocusTimer({ compact }: Props) {
+  const { startedAt, pomodoro, start, stop, setPomodoro } = useTimer();
+  const addLog = useStore((s) => s.addLog);
+  const data = useStore();
+  const [draft, setDraft] = useState<{ minutes: number; tag: LogTag; note: string } | null>(null);
+  const elapsed = useElapsed(startedAt);
+  const reached = usePomodoroAlert(elapsed);
+
+  const logSession = (minutes: number, tag: LogTag, note: string) => {
+    addLog({ date: today(), minutes, week: currentWeek(data) ?? undefined, tag, note: note.trim() });
+    toast(`Logged ${fmtHours(minutes)}`);
+  };
 
   const onStop = () => {
     const minutes = stop();
@@ -47,15 +66,26 @@ export function FocusTimer() {
       toast('Session under a minute, not logged.');
       return;
     }
-    setDraft({ minutes, tag: 'study', note: '' });
+    if (compact) logSession(minutes, 'study', '');
+    else setDraft({ minutes, tag: 'study', note: '' });
   };
 
-  const onLog = () => {
-    if (!draft) return;
-    addLog({ date: today(), minutes: draft.minutes, week: currentWeek(data) ?? undefined, tag: draft.tag, note: draft.note.trim() });
-    toast(`Logged ${fmtHours(draft.minutes)}`);
-    setDraft(null);
-  };
+  if (compact) {
+    return startedAt ? (
+      <span className={`timer-chip${reached ? ' reached' : ''}`}>
+        <span className="timer-clock" aria-live="off">
+          {fmtClock(elapsed)}
+        </span>
+        <button className="btn sm" onClick={onStop} aria-label="Stop timer and log session">
+          <Square size={12} filled /> Stop
+        </button>
+      </span>
+    ) : (
+      <button className="btn sm ghost" onClick={start} aria-label="Start focus timer">
+        <Play size={13} filled /> Focus
+      </button>
+    );
+  }
 
   if (draft) {
     return (
@@ -74,11 +104,22 @@ export function FocusTimer() {
           placeholder="Note (optional)"
           value={draft.note}
           onChange={(e) => setDraft({ ...draft, note: e.target.value })}
-          onKeyDown={(e) => e.key === 'Enter' && onLog()}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              logSession(draft.minutes, draft.tag, draft.note);
+              setDraft(null);
+            }
+          }}
           aria-label="Session note"
         />
         <div className="row">
-          <button className="btn primary sm" onClick={onLog}>
+          <button
+            className="btn primary sm"
+            onClick={() => {
+              logSession(draft.minutes, draft.tag, draft.note);
+              setDraft(null);
+            }}
+          >
             Log
           </button>
           <button className="btn ghost sm" onClick={() => setDraft(null)}>

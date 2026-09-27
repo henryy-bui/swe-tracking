@@ -1,20 +1,25 @@
 import { useId, useState } from 'react';
 import type { WeekBucket } from '@/lib/derive';
 import { fmtDate, fmtHours } from '@/lib/date';
+import { useContainerWidth } from '@/lib/useContainerWidth';
 
 interface Props {
   buckets: WeekBucket[]; // oldest first
   targetMinutes: number;
 }
 
-const W = 640;
 const H = 220;
 const PAD = { top: 18, right: 12, bottom: 28, left: 34 };
 
-/* Single-series bar chart of study minutes per calendar week, with a dashed target line. */
-export function WeeklyHoursChart({ buckets, targetMinutes }: Props) {
+/* Single-series bar chart of study minutes per calendar week, with a dashed target line.
+   The viewBox matches the container's pixel width so labels stay at their true size on phones. */
+export function WeeklyHoursChart({ buckets: all, targetMinutes }: Props) {
   const [hover, setHover] = useState<number | null>(null);
   const id = useId();
+  const [ref, measured] = useContainerWidth<HTMLDivElement>();
+  const W = Math.max(280, measured);
+  const narrow = W < 420;
+  const buckets = narrow ? all.slice(-8) : all;
 
   const innerW = W - PAD.left - PAD.right;
   const innerH = H - PAD.top - PAD.bottom;
@@ -28,10 +33,11 @@ export function WeeklyHoursChart({ buckets, targetMinutes }: Props) {
   const ticks = [0, Math.round(maxHours / 2), maxHours].filter((v, i, a) => a.indexOf(v) === i);
   const maxIdx = buckets.reduce((best, b, i) => (b.minutes > buckets[best].minutes ? i : best), 0);
   const total = buckets.reduce((s, b) => s + b.minutes, 0);
+  const labelEvery = slot < 44 ? 2 : 1;
 
   return (
-    <div className="chart">
-      <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-labelledby={`${id}-title`} onMouseLeave={() => setHover(null)}>
+    <div className="chart" ref={ref}>
+      <svg viewBox={`0 0 ${W} ${H}`} width={W} height={H} role="img" aria-labelledby={`${id}-title`} onMouseLeave={() => setHover(null)}>
         <title id={`${id}-title`}>{`Study hours per week for the last ${buckets.length} weeks, ${fmtHours(total)} in total.`}</title>
         {ticks.map((h) => (
           <g key={h}>
@@ -49,7 +55,7 @@ export function WeeklyHoursChart({ buckets, targetMinutes }: Props) {
           const top = y(b.minutes);
           const h = Math.max(0, PAD.top + innerH - top);
           const labelled = b.minutes > 0 && (i === maxIdx || b.current || hover === i);
-          const showTick = buckets.length <= 8 || i % 2 === buckets.length % 2 || b.current;
+          const showTick = b.current || i % labelEvery === (buckets.length - 1) % labelEvery;
           return (
             <g key={b.start}>
               {h > 0 && (
@@ -82,6 +88,7 @@ export function WeeklyHoursChart({ buckets, targetMinutes }: Props) {
                 onMouseEnter={() => setHover(i)}
                 onFocus={() => setHover(i)}
                 onBlur={() => setHover(null)}
+                onTouchStart={() => setHover(i)}
                 tabIndex={0}
                 aria-label={`Week of ${fmtDate(b.start)}: ${fmtHours(b.minutes)}`}
               />
@@ -90,7 +97,7 @@ export function WeeklyHoursChart({ buckets, targetMinutes }: Props) {
         })}
         <line className="baseline" x1={PAD.left} x2={W - PAD.right} y1={PAD.top + innerH} y2={PAD.top + innerH} />
       </svg>
-      {hover !== null && (
+      {hover !== null && buckets[hover] && (
         <div
           className="tooltip"
           style={{

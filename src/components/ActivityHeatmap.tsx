@@ -1,9 +1,10 @@
 import { addDays, fmtDate, fmtHours, today, weekStart } from '@/lib/date';
+import { useContainerWidth } from '@/lib/useContainerWidth';
 
 interface Props {
   minutesByDay: Map<string, number>;
   activeDays: Set<string>;
-  weeks?: number;
+  maxWeeks?: number;
 }
 
 /* Level 0 = nothing, 1 = active without logged time, 2-5 = sequential steps of logged time. */
@@ -17,8 +18,12 @@ const level = (minutes: number, active: boolean): number => {
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
-/* GitHub-style calendar of the last N weeks. Columns are weeks (Mon-Sun), rows are weekdays. */
-export function ActivityHeatmap({ minutesByDay, activeDays, weeks = 26 }: Props) {
+/* GitHub-style calendar. Columns are weeks (Mon-Sun), rows are weekdays.
+   The number of weeks shrinks with the container so it never needs horizontal scrolling. */
+export function ActivityHeatmap({ minutesByDay, activeDays, maxWeeks = 26 }: Props) {
+  const [ref, width] = useContainerWidth<HTMLDivElement>();
+  const weeks = Math.min(maxWeeks, width >= 640 ? 26 : width >= 480 ? 20 : 14);
+
   const end = today();
   const firstMonday = addDays(weekStart(end), -7 * (weeks - 1));
   const columns: string[][] = [];
@@ -39,7 +44,7 @@ export function ActivityHeatmap({ minutesByDay, activeDays, weeks = 26 }: Props)
   const activeCount = [...activeDays].filter((d) => d >= firstMonday && d <= end).length;
 
   return (
-    <div className="heatmap-wrap">
+    <div className="heatmap-wrap" ref={ref}>
       <div className="heatmap" role="img" aria-label={`Activity over the last ${weeks} weeks: ${activeCount} active days, ${fmtHours(totalMinutes)} logged.`}>
         <div className="heatmap-months" style={{ gridTemplateColumns: `repeat(${weeks}, 1fr)` }}>
           {labels.map((l, i) => (

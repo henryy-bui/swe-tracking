@@ -66,4 +66,5 @@ export const TrendingUp = make('trending-up', ['m3 17 6-6 4 4 8-8', 'M14 7h7v7']
 export const TrendingDown = make('trending-down', ['m3 7 6 6 4-4 8 8', 'M14 17h7v-7']);
 export const Target = make('target', ['M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z', 'M12 17a5 5 0 1 0 0-10 5 5 0 0 0 0 10Z', 'M12 13a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z']);
 export const Flame = make('flame', ['M12 22c4.4 0 7-2.9 7-7 0-3.5-2.5-5.5-3.5-8-1 2-2 2.5-2.5 2.5C13 7 12 4 9 2c0 3-1.5 4.5-2.5 6.5C5.5 10.4 5 12 5 15c0 4.1 2.6 7 7 7Z']);
+export const Menu = make('menu', ['M4 7h16', 'M4 12h16', 'M4 17h16']);
 export const ExternalLink = make('external-link', ['M14 4h6v6', 'M20 4 10 14', 'M18 13v6a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h6']);
