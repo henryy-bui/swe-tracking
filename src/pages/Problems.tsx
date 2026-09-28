@@ -2,6 +2,8 @@ import { useId, useMemo, useRef, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { REVIEW_INTERVALS, useStore, type Difficulty, type Problem } from '@/store/useStore';
 import { weekDef } from '@/data/roadmap';
+import { dsaLabel } from '@/data/dsa';
+import { seedCandidates, seedProblems } from '@/lib/dsaSeed';
 import { currentWeek, isReviewDue, problemStats } from '@/lib/derive';
 import { addDays, fmtDate, relDay, today } from '@/lib/date';
 import { plural } from '@/lib/format';
@@ -99,9 +101,23 @@ export default function Problems() {
           <StatTile
             label="This week's topic"
             value={cw ? <Vi>{dsaTopic(cw)}</Vi> : '—'}
-            sub={cw ? <Vi>{weekDef(cw).dsa}</Vi> : <Link to="/settings">Set a start date</Link>}
+            sub={cw ? <Vi>{dsaLabel(weekDef(cw).dsa)}</Vi> : <Link to="/settings">Set a start date</Link>}
           />
         </div>
+        {cw && seedCandidates(data, cw).length > 0 && (
+          <div className="row">
+            <button
+              className="btn"
+              onClick={() => {
+                const n = seedProblems(seedCandidates(data, cw));
+                toast(`${plural(n, 'problem')} from week ${cw} added to your to-do list.`);
+              }}
+            >
+              Add this week's {plural(seedCandidates(data, cw).length, 'problem')}
+            </button>
+            <span className="small ink-3">The roadmap names them for week {cw}; difficulty defaults to Medium.</span>
+          </div>
+        )}
 
         <div className="card">
           <div className="card-head">

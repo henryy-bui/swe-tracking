@@ -8,6 +8,7 @@ import { downloadBackup, downloadText } from '@/lib/download';
 import { progressReportMarkdown } from '@/lib/report';
 import { buildIcs, countIcsEvents } from '@/lib/ics';
 import { plural } from '@/lib/format';
+import { allSeedCandidates, seedProblems } from '@/lib/dsaSeed';
 import { PageHead, toast } from '@/components/ui';
 import { CloudSyncCard } from '@/components/CloudSync';
 import { CalendarCheck, Download, FileText } from '@/components/icons';
@@ -23,6 +24,7 @@ export default function Settings() {
   const fileRef = useRef<HTMLInputElement>(null);
 
   const cw = currentWeek(data);
+  const seedable = allSeedCandidates(data);
   const endDate = data.startDate ? addDays(data.startDate, TOTAL_WEEKS * 7 - 1) : null;
 
   const savePlan = (e: FormEvent) => {
@@ -171,6 +173,30 @@ export default function Settings() {
               {importError.friendly}
             </p>
           )}
+        </div>
+
+        <div className="card">
+          <div className="card-head">
+            <h2>Roadmap DSA problems</h2>
+          </div>
+          <p className="ink-2 small">
+            The roadmap names two or three NeetCode problems for most weeks. Add the ones you do not have yet to the DSA page in one go, tagged with their
+            week and pattern. Difficulty defaults to Medium; edit it on the DSA page.
+          </p>
+          <div className="row section-sm">
+            <button
+              className="btn"
+              disabled={seedable.length === 0}
+              onClick={() => {
+                if (!window.confirm(`Add ${plural(seedable.length, 'problem')} to your DSA list?`)) return;
+                const n = seedProblems(seedable);
+                toast(`${plural(n, 'problem')} added to DSA.`);
+              }}
+            >
+              Add all missing problems
+            </button>
+            <span className="hint">{seedable.length === 0 ? 'Every roadmap problem is already in your list.' : `${plural(seedable.length, 'problem')} not in your list yet.`}</span>
+          </div>
         </div>
 
         <div className="card">

@@ -1,30 +1,44 @@
-import { useId } from 'react';
+import { useEffect, useId } from 'react';
+import { useLocation } from 'react-router-dom';
 import { useStore, type ResourceStatus } from '@/store/useStore';
-import { RESOURCES, type ResourceDef } from '@/data/roadmap';
+import { RESOURCES, type ResourceDef, type ResourceType } from '@/data/roadmap';
 import { resourceState } from '@/lib/derive';
 import { STATUS_LABEL } from '@/lib/labels';
 import { useDraft } from '@/lib/useDraft';
 import { PageHead, StatusPill, Vi, WeekLink, toast } from '@/components/ui';
 
 const RESOURCE_STATUSES: ResourceStatus[] = ['not-started', 'in-progress', 'done'];
+const TYPE_LABEL: Record<ResourceType, string> = { book: 'Book', course: 'Course', docs: 'Docs' };
 
 export default function Resources() {
   const data = useStore();
-  const categories = [...new Set(RESOURCES.map((r) => r.category))];
+  const { hash } = useLocation();
+  const domains = [...new Set(RESOURCES.map((r) => r.domain))];
   const done = RESOURCES.filter((r) => resourceState(data, r.id).status === 'done').length;
+
+  // /resources#book-lets-go from a week page lands on that row.
+  useEffect(() => {
+    const id = hash.replace(/^#/, '');
+    if (!id) return;
+    const el = document.getElementById(id);
+    if (el) {
+      el.scrollIntoView({ block: 'center' });
+      el.classList.add('flash');
+      const t = setTimeout(() => el.classList.remove('flash'), 1600);
+      return () => clearTimeout(t);
+    }
+  }, [hash]);
 
   return (
     <>
-      <PageHead title="Resources" subtitle={`${done} of ${RESOURCES.length} complete. The courses and books from the roadmap, with the weeks they support.`} />
+      <PageHead title="Resources" subtitle={`${done} of ${RESOURCES.length} complete. The books, courses and docs from the roadmap, with the chapters to read and the weeks they support.`} />
       <div className="stack">
-        {categories.map((cat) => (
-          <div className="card" key={cat}>
+        {domains.map((domain) => (
+          <div className="card" key={domain}>
             <div className="card-head">
-              <h2>
-                <Vi>{cat}</Vi>
-              </h2>
+              <h2>{domain}</h2>
             </div>
-            {RESOURCES.filter((r) => r.category === cat).map((r) => (
+            {RESOURCES.filter((r) => r.domain === domain).map((r) => (
               <ResourceRow key={r.id} def={r} />
             ))}
           </div>
@@ -59,7 +73,7 @@ function ResourceRow({ def }: { def: ResourceDef }) {
   };
 
   return (
-    <div className="resource">
+    <div className="resource" id={def.id}>
       <div>
         <div className="row">
           <strong>
@@ -68,11 +82,15 @@ function ResourceRow({ def }: { def: ResourceDef }) {
               <span className="sr-only"> (opens in a new tab)</span>
             </a>
           </strong>
-          <span className="pill">{def.type === 'book' ? 'Book' : 'Course'}</span>
+          <span className="small ink-2">{def.author}</span>
+          <span className="pill">{TYPE_LABEL[def.type]}</span>
           <StatusPill status={st.status} />
         </div>
         <div className="desc">
-          <Vi>{def.description}</Vi>
+          <Vi>{def.chapters}</Vi>
+        </div>
+        <div className="small ink-2 section-xs">
+          <Vi>{def.goal}</Vi>
         </div>
         <div className="small ink-3 section-xs">
           Supports{' '}

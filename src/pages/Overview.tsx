@@ -1,9 +1,9 @@
 import { useState, type FormEvent } from 'react';
 import { useStore, type AppData } from '@/store/useStore';
-import { PHASES, PROJECTS, TOTAL_WEEKS, phaseOfWeek, weekDef } from '@/data/roadmap';
+import { GUIDELINES, PHASES, PROJECTS, TOTAL_WEEKS, phaseOfWeek, weekDef } from '@/data/roadmap';
 import {
-  activeDays, currentWeek, dueProblems, expectedDone, forecast, minutesByCalendarWeek, minutesByDay, minutesThisWeek, openFollowUps, overallProgress,
-  overdueFollowUps, pace, phaseProgress, planStatus, projectProgress, projectState, sortFollowUps, streak, weekProgress, weekRange, weekStatus,
+  activeDays, currentWeek, dueProblems, expectedDone, focusWeek, forecast, minutesByCalendarWeek, minutesByDay, minutesThisWeek, openFollowUps, overallProgress,
+  overdueFollowUps, pace, phaseProgress, planStatus, projectProgress, projectState, sortFollowUps, streak, weekProgress, weekRange, weekStatus, weekStatusCounts,
 } from '@/lib/derive';
 import { achievements, nextUp, unlockedCount } from '@/lib/achievements';
 import { diffDays, fmtDateFull, fmtDateWeekday, fmtRange, relDay, today } from '@/lib/date';
@@ -12,6 +12,7 @@ import { TERMS } from '@/lib/labels';
 import { Arrow, DueLabel, EmptyState, MoreLink, PageHead, PriorityPill, ProgressBar, ProgressLine, StatTile, StatusPill, Vi, WeekLink, toast } from '@/components/ui';
 import { WeeklyHoursChart } from '@/components/WeeklyHoursChart';
 import { ActivityHeatmap } from '@/components/ActivityHeatmap';
+import { StatusDonut } from '@/components/StatusDonut';
 import { TaskChecklist } from '@/components/TaskChecklist';
 import { AlertTriangle, RefreshCw, Target, TrendingDown, TrendingUp } from '@/components/icons';
 
@@ -27,6 +28,7 @@ export default function Overview() {
         {status === 'unset' && <StartDateBanner />}
         <HeroCard data={data} />
         <Tiles data={data} />
+        <StatusTiles data={data} />
         <PhasesCard data={data} />
         <div className="grid-2">
           <ThisWeekCard data={data} />
@@ -35,7 +37,11 @@ export default function Overview() {
         <ActivityCard data={data} />
         <div className="grid-2">
           <HoursCard data={data} />
+          <StatusCard data={data} />
+        </div>
+        <div className="grid-2">
           <ProjectsSummaryCard data={data} />
+          <GuidelinesCard />
         </div>
         <AchievementsNextCard data={data} />
         {status === 'active' && cw && cw < TOTAL_WEEKS && <ComingUpCard data={data} cw={cw} />}
@@ -140,9 +146,9 @@ function HeroCard({ data }: { data: AppData }) {
                 {TOTAL_WEEKS}-week plan · {PHASES.length} phases · {overall.total} {TERMS.tasks}
               </div>
               <h2>
-                Frontend <Arrow /> Senior Fullstack / Software Engineer
+                Frontend <Arrow /> {GUIDELINES.goal}
               </h2>
-              <div className="sub">Golang backend, distributed systems, AWS, and AI-native work.</div>
+              <div className="sub">Senior frontend, Golang backend, distributed systems, AWS, and AI-native work.</div>
             </>
           )}
         </div>
@@ -185,7 +191,22 @@ function Tiles({ data }: { data: AppData }) {
   );
 }
 
+/* The dashboard's week counts: done, in progress, not started, blocked. */
+function StatusTiles({ data }: { data: AppData }) {
+  const c = weekStatusCounts(data);
+  const of = `of ${c.total} weeks`;
+  return (
+    <div className="grid-tiles">
+      <StatTile label="Weeks done" value={c.done} sub={`${of} · ${c.pct}%`} />
+      <StatTile label="In progress" value={c.inProgress} sub={of} />
+      <StatTile label="Not started" value={c.notStarted} sub={c.skipped > 0 ? `${of} · ${plural(c.skipped, 'week')} skipped` : of} />
+      <StatTile label="Blocked" value={c.blocked} sub={c.blocked > 0 ? 'Resume them from the week page' : 'Nothing blocked'} />
+    </div>
+  );
+}
+
 function PhasesCard({ data }: { data: AppData }) {
+  const all = weekStatusCounts(data);
   return (
     <div className="card">
       <div className="card-head">
@@ -195,6 +216,11 @@ function PhasesCard({ data }: { data: AppData }) {
       <div className="stack">
         {PHASES.map((ph) => {
           const pp = phaseProgress(data, ph.id);
+          const c = weekStatusCounts(data, ph.id);
+          const parts = [`${c.done}/${c.total} done`];
+          if (c.inProgress) parts.push(`${c.inProgress} in progress`);
+          if (c.blocked) parts.push(`${c.blocked} blocked`);
+          parts.push(`${pct(pp.done, pp.total)}%`);
           return (
             <ProgressLine
               key={ph.id}
@@ -208,24 +234,77 @@ function PhasesCard({ data }: { data: AppData }) {
               }
               done={pp.done}
               total={pp.total}
-              right={`${pp.weeksDone}/${pp.weeks} weeks · ${pct(pp.done, pp.total)}%`}
-              valueText={`${pp.done} of ${pp.total} ${TERMS.tasks}, ${pp.weeksDone} of ${pp.weeks} weeks`}
+              right={parts.join(' · ')}
+              valueText={`${pp.done} of ${pp.total} ${TERMS.tasks}, ${c.done} of ${c.total} weeks done, ${c.inProgress} in progress, ${c.blocked} blocked`}
             />
           );
         })}
+        <div className="row between small ink-2">
+          <span>
+            <strong>Total</strong> · {TOTAL_WEEKS} weeks
+          </span>
+          <span className="tabular">
+            {all.done} done · {all.inProgress} in progress · {all.notStarted} not started · {all.blocked} blocked · {all.pct}%
+          </span>
+        </div>
       </div>
+    </div>
+  );
+}
+
+function StatusCard({ data }: { data: AppData }) {
+  return (
+    <div className="card">
+      <div className="card-head">
+        <h2>Weeks by status</h2>
+        <span className="small ink-2">Blocked and skipped are set on the week page</span>
+      </div>
+      <StatusDonut counts={weekStatusCounts(data)} />
+    </div>
+  );
+}
+
+function GuidelinesCard() {
+  return (
+    <div className="card">
+      <div className="card-head">
+        <h2>Guidelines</h2>
+        <span className="small ink-2">From the roadmap</span>
+      </div>
+      <dl className="kv">
+        <dt>Hours</dt>
+        <dd>
+          <Vi>{GUIDELINES.hoursPerWeek}</Vi>
+        </dd>
+        <dt>DSA</dt>
+        <dd>
+          <Vi>{GUIDELINES.dsaPerDay}</Vi>
+        </dd>
+        <dt>Review</dt>
+        <dd>
+          <Vi>{GUIDELINES.review}</Vi>
+        </dd>
+        <dt>Pace</dt>
+        <dd>
+          <Vi>{GUIDELINES.pace}</Vi>
+        </dd>
+        <dt>Sources</dt>
+        <dd>{GUIDELINES.sources}</dd>
+        <dt>Goal</dt>
+        <dd>{GUIDELINES.goal}</dd>
+      </dl>
     </div>
   );
 }
 
 function ThisWeekCard({ data }: { data: AppData }) {
   const cw = currentWeek(data);
-  const week = cw ?? 1;
+  const week = focusWeek(data);
   const wp = weekProgress(data, week);
   return (
     <div className="card">
       <div className="card-head">
-        <h2>{cw ? `This week · Week ${cw}` : 'Week 1 preview'}</h2>
+        <h2>{cw ? `This week · Week ${cw}` : `Week ${week} preview`}</h2>
         <span className="row">
           <StatusPill status={weekStatus(data, week)} />
           <MoreLink to={`/weeks/${week}`} ariaLabel={`Open week ${week}`}>

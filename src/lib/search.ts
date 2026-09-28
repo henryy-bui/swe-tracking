@@ -1,5 +1,6 @@
 /* Global search over roadmap content and the user's own data. Pure: build an index, then query it. */
 import { PHASES, PROJECTS, RESOURCES, WEEKS } from '@/data/roadmap';
+import { dsaLabel } from '@/data/dsa';
 import type { AppData } from '@/store/useStore';
 import { weekStatus } from '@/lib/derive';
 import { fmtDate } from '@/lib/date';
@@ -51,6 +52,7 @@ export const ACTIONS: { id: string; title: string; keywords: string }[] = [
   { id: 'theme', title: 'Switch theme', keywords: 'theme dark light mode' },
   { id: 'today', title: 'Go to the current week', keywords: 'today current week now' },
   { id: 'export', title: 'Export backup (JSON)', keywords: 'export backup download json' },
+  { id: 'seed-dsa', title: "Add this week's DSA problems", keywords: 'dsa seed add problems week neetcode leetcode' },
 ];
 
 export const buildIndex = (data: AppData): SearchItem[] => {
@@ -67,12 +69,12 @@ export const buildIndex = (data: AppData): SearchItem[] => {
       title: `Week ${w.week} · ${w.topic}`,
       subtitle: `Phase ${phase.id} · ${STATUS_LABEL[st]}`,
       to: `/weeks/${w.week}`,
-      keywords: norm(`week ${w.week} ${w.topic} ${w.dsa} phase ${phase.id} ${phase.title}`),
+      keywords: norm(`week ${w.week} ${w.topic} ${dsaLabel(w.dsa)} ${w.reading} phase ${phase.id} ${phase.title}`),
     });
-    w.tasks.forEach((t, i) =>
-      items.push({ id: `task:${w.week}:${i}`, kind: 'task', title: t, subtitle: `Week ${w.week} · ${w.topic}`, to: `/weeks/${w.week}`, keywords: norm(`${t} week ${w.week}`) }),
+    w.tasks.forEach((t) =>
+      items.push({ id: `task:${w.week}:${t.id}`, kind: 'task', title: t.text, subtitle: `Week ${w.week} · ${w.topic}`, to: `/weeks/${w.week}`, keywords: norm(`${t.text} week ${w.week}`) }),
     );
-    items.push({ id: `task:${w.week}:dsa`, kind: 'task', title: `DSA: ${w.dsa}`, subtitle: `Week ${w.week}`, to: `/weeks/${w.week}`, keywords: norm(`dsa ${w.dsa} week ${w.week}`) });
+    items.push({ id: `task:${w.week}:dsa`, kind: 'task', title: `DSA: ${dsaLabel(w.dsa)}`, subtitle: `Week ${w.week}`, to: `/weeks/${w.week}`, keywords: norm(`dsa ${dsaLabel(w.dsa)} week ${w.week}`) });
     for (const c of data.customTasks[String(w.week)] ?? []) {
       items.push({ id: `task:${w.week}:c${c.id}`, kind: 'task', title: c.title, subtitle: `Week ${w.week} · ${TERMS.yours}`, to: `/weeks/${w.week}`, keywords: norm(`${c.title} week ${w.week}`) });
     }
@@ -112,11 +114,11 @@ export const buildIndex = (data: AppData): SearchItem[] => {
       title: `${p.number}. ${p.title}`,
       subtitle: `${p.tag} · weeks ${p.weeks[0]}–${p.weeks[1]}`,
       to: '/projects',
-      keywords: norm(`${p.title} ${p.tag} ${p.goal} ${p.requirements} ${p.milestones.join(' ')} ${saved.note ?? ''}`),
+      keywords: norm(`${p.title} ${p.tag} ${p.problem} ${p.stack} ${p.milestones.map((m) => m.title).join(' ')} ${saved.note ?? ''}`),
     });
   }
   for (const r of RESOURCES) {
-    items.push({ id: `res:${r.id}`, kind: 'resource', title: r.title, subtitle: r.category, to: '/resources', keywords: norm(`${r.title} ${r.description} ${r.category} ${r.type}`) });
+    items.push({ id: `res:${r.id}`, kind: 'resource', title: r.title, subtitle: `${r.domain} · ${r.author}`, to: `/resources#${r.id}`, keywords: norm(`${r.title} ${r.author} ${r.chapters} ${r.goal} ${r.domain} ${r.type}`) });
   }
   return items;
 };

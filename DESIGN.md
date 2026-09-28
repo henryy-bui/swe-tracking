@@ -24,7 +24,9 @@ Use the same word for the same thing everywhere, including reports and search. L
 | The achievements page | Achievements | milestones (which are the checkpoints inside a side project) |
 | A task the user added | tagged **Yours** | mine, custom |
 | Project badges | Start project 1 / Finish project 1 | side project 1 |
-| Statuses | Not started · In progress · Done · Skipped | todo, complete |
+| Statuses | Not started · In progress · Done · Skipped · Blocked (Skipped and Blocked are manual flags on a week) | todo, complete, stuck |
+| Project milestone groups | Engineering requirements · Deliverables · Yours | tasks, checklist |
+| The week's reading | Reading this week | resources, books |
 | Enumerations | Capitalized labels: Easy, Study, High priority | raw values |
 
 Roadmap content (topics, tasks, goals) is Vietnamese and is wrapped in `<Vi>` so screen readers switch language. UI chrome is English.

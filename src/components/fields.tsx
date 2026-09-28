@@ -11,8 +11,8 @@ interface Base {
 
 const WEEKS = Array.from({ length: TOTAL_WEEKS }, (_, i) => i + 1);
 
-/* "Sliding Window (…)" -> "Sliding Window" */
-export const dsaTopic = (week: number) => weekDef(week).dsa.replace(/\s*\(.*$/, '').trim();
+/* The week's DSA pattern, e.g. "Sliding Window". */
+export const dsaTopic = (week: number) => weekDef(week).dsa.pattern;
 
 export function WeekSelect({
   value, onChange, labelOf = (w) => weekDef(w).topic, allowNone = true, ...rest

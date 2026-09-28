@@ -1,9 +1,10 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { PROJECTS, type ProjectId } from '@/data/roadmap';
+import { LEGACY_MILESTONE_MAP, LEGACY_MS_RE, LEGACY_RESOURCE_MAP, LEGACY_TASK_MAP, LEGACY_TASK_RE } from '@/data/legacy';
 import { addDays, isValidISODate, today } from '@/lib/date';
 import { uid } from '@/lib/format';
-import { customKey, milestoneIndex } from '@/lib/keys';
+import { customKey } from '@/lib/keys';
 
 /* ---------- Persisted data types ---------- */
 
@@ -95,6 +96,9 @@ export interface Retro {
   at: string;
 }
 
+/* Manual overrides on a week. Everything else about a week's status is derived from its checkboxes. */
+export type WeekFlag = 'skipped' | 'blocked';
+
 export interface AppData {
   version: number;
   updatedAt: string | null; // ISO timestamp of the last local change; drives cloud sync
@@ -103,7 +107,8 @@ export interface AppData {
   tasks: Record<string, TaskMark>;
   customTasks: Record<string, CustomTask[]>; // by week
   weekNotes: Record<string, string>;
-  weekStatus: Record<string, 'skipped'>;
+  weekLinks: Record<string, string>; // by week: repo / LeetCode link
+  weekStatus: Record<string, WeekFlag>;
   retros: Record<string, Retro>; // by week
   logs: LogEntry[];
   followUps: FollowUp[];
@@ -113,16 +118,19 @@ export interface AppData {
 }
 
 export const STORAGE_KEY = 'swe-tracking:v1';
-export const DATA_VERSION = 2; // v2: resource status 'todo' became 'not-started'
+/* v2: resource status 'todo' became 'not-started'.
+   v3: roadmap items keyed by stable ids instead of position; Boot.dev resources merged; weekLinks added. */
+export const DATA_VERSION = 3;
 
 export const defaultData = (): AppData => ({
   version: DATA_VERSION,
   updatedAt: null,
   startDate: null,
-  weeklyTargetHours: 10,
+  weeklyTargetHours: 20,
   tasks: {},
   customTasks: {},
   weekNotes: {},
+  weekLinks: {},
   weekStatus: {},
   retros: {},
   logs: [],
@@ -140,15 +148,74 @@ export const pickData = (s: AppData): AppData => {
   return out as unknown as AppData;
 };
 
-/* Brings any older document (persisted, imported, or from the cloud) up to the current shape. */
+const RESOURCE_RANK: Record<string, number> = { 'not-started': 0, 'in-progress': 1, done: 2 };
+
+/* Older tick wins when two legacy keys land on the same item. */
+const mergeMark = (a: TaskMark | undefined, b: TaskMark): TaskMark => (a && a.done && (!b.done || a.at <= b.at) ? a : b);
+
+const migrateTasks = (tasks: AppData['tasks']): AppData['tasks'] => {
+  const out: AppData['tasks'] = {};
+  for (const [key, mark] of Object.entries(tasks ?? {})) {
+    if (!LEGACY_TASK_RE.test(key)) {
+      out[key] = mergeMark(out[key], mark);
+      continue;
+    }
+    const target = LEGACY_TASK_MAP[key];
+    if (target) out[target] = mergeMark(out[target], mark);
+  }
+  return out;
+};
+
+const migrateProjects = (projects: AppData['projects']): AppData['projects'] => {
+  const out: AppData['projects'] = {};
+  for (const [pid, saved] of Object.entries(projects ?? {})) {
+    const list: ProjectMilestone[] = [];
+    const def = PROJECTS.find((p) => p.id === pid);
+    for (const m of saved.milestones ?? []) {
+      if (m.custom || !LEGACY_MS_RE.test(m.id)) {
+        list.push(m);
+        continue;
+      }
+      const target = LEGACY_MILESTONE_MAP[m.id];
+      if (!target) continue;
+      const existing = list.find((x) => x.id === target);
+      if (existing) existing.done = existing.done || m.done;
+      else list.push({ id: target, title: def?.milestones.find((d) => `${pid}-${d.id}` === target)?.title ?? m.title, done: m.done, custom: false });
+    }
+    out[pid] = { ...saved, milestones: list };
+  }
+  return out;
+};
+
+const migrateResources = (resources: AppData['resources']): AppData['resources'] => {
+  const out: AppData['resources'] = {};
+  for (const [oldId, r] of Object.entries(resources ?? {})) {
+    const id = LEGACY_RESOURCE_MAP[oldId] ?? oldId;
+    const status = ((r.status as string | undefined) === 'todo' ? 'not-started' : r.status) as ResourceStatus | undefined;
+    const prev = out[id];
+    if (!prev) {
+      out[id] = { ...r, status };
+      continue;
+    }
+    // Two old resources merged into one: keep the furthest status, the highest progress, and both notes.
+    const merged: Partial<ResourceMark> = { ...prev };
+    if ((RESOURCE_RANK[status ?? ''] ?? -1) > (RESOURCE_RANK[prev.status ?? ''] ?? -1)) merged.status = status;
+    merged.progress = Math.max(Number(prev.progress) || 0, Number(r.progress) || 0);
+    const notes = [prev.note, r.note].filter((n) => n && n.trim());
+    if (notes.length) merged.note = notes.join(' · ');
+    out[id] = merged;
+  }
+  return out;
+};
+
+/* Brings any older document (persisted, imported, or from the cloud) up to the current shape.
+   Idempotent: running it on a current document changes nothing. */
 export const migrateData = (input: Partial<AppData>): AppData => {
   const d: AppData = { ...defaultData(), ...input, version: DATA_VERSION };
-  const resources: AppData['resources'] = {};
-  for (const [id, r] of Object.entries(d.resources ?? {})) {
-    const status = (r.status as string | undefined) === 'todo' ? 'not-started' : r.status;
-    resources[id] = { ...r, status };
-  }
-  d.resources = resources;
+  d.tasks = migrateTasks(d.tasks);
+  d.projects = migrateProjects(d.projects);
+  d.resources = migrateResources(d.resources);
+  d.weekLinks = d.weekLinks ?? {};
   return d;
 };
 
@@ -163,7 +230,7 @@ export const validateImport = (obj: unknown): string | null => {
   for (const k of ['logs', 'followUps', 'problems'] as const) {
     if (o[k] !== undefined && !Array.isArray(o[k])) return `Field "${k}" must be an array.`;
   }
-  for (const k of ['tasks', 'customTasks', 'weekNotes', 'weekStatus', 'retros', 'resources', 'projects'] as const) {
+  for (const k of ['tasks', 'customTasks', 'weekNotes', 'weekLinks', 'weekStatus', 'retros', 'resources', 'projects'] as const) {
     if (o[k] !== undefined && (typeof o[k] !== 'object' || o[k] === null || Array.isArray(o[k]))) return `Field "${k}" must be an object.`;
   }
   const known = DATA_KEYS.some((k) => k in o && k !== 'version' && k !== 'updatedAt');
@@ -180,7 +247,8 @@ export interface Actions {
   setTask: (key: string, done: boolean) => void;
   setWeekTasks: (week: number, keys: string[], done: boolean) => void;
   setWeekNote: (week: number, text: string) => void;
-  toggleSkipWeek: (week: number) => void;
+  setWeekLink: (week: number, url: string) => void;
+  setWeekFlag: (week: number, flag: WeekFlag | null) => void;
   addCustomTask: (week: number, title: string) => void;
   deleteCustomTask: (week: number, id: string) => void;
   setRetro: (week: number, patch: Partial<Omit<Retro, 'at'>>) => void;
@@ -268,12 +336,20 @@ export const useStore = create<StoreState>()(
             return { weekNotes };
           }),
 
-        toggleSkipWeek: (week) =>
+        setWeekLink: (week, url) =>
+          set((s) => {
+            const weekLinks = { ...s.weekLinks };
+            if (url.trim()) weekLinks[String(week)] = url.trim();
+            else delete weekLinks[String(week)];
+            return { weekLinks };
+          }),
+
+        setWeekFlag: (week, flag) =>
           set((s) => {
             const weekStatus = { ...s.weekStatus };
             const k = String(week);
-            if (weekStatus[k] === 'skipped') delete weekStatus[k];
-            else weekStatus[k] = 'skipped';
+            if (flag) weekStatus[k] = flag;
+            else delete weekStatus[k];
             return { weekStatus };
           }),
 
@@ -378,7 +454,7 @@ export const useStore = create<StoreState>()(
             } else {
               // Default milestone from the roadmap, first time it is touched.
               const def = PROJECTS.find((p) => p.id === projectId);
-              const title = def?.milestones[milestoneIndex(projectId, milestoneId)] ?? milestoneId;
+              const title = def?.milestones.find((m) => `${projectId}-${m.id}` === milestoneId)?.title ?? milestoneId;
               list.push({ id: milestoneId, title, done: true, custom: false });
             }
             return { projects: { ...s.projects, [projectId]: { ...saved, milestones: list } } };

@@ -2,13 +2,14 @@
    so a term changes in one place. See the vocabulary table in DESIGN.md. */
 import type { Difficulty, LogTag, Priority } from '@/store/useStore';
 
-export type Status = 'not-started' | 'in-progress' | 'done' | 'skipped';
+export type Status = 'not-started' | 'in-progress' | 'done' | 'skipped' | 'blocked';
 
 export const STATUS_LABEL: Record<Status, string> = {
   'not-started': 'Not started',
   'in-progress': 'In progress',
   done: 'Done',
   skipped: 'Skipped',
+  blocked: 'Blocked',
 };
 
 export const LOG_TAG_LABEL: Record<LogTag, string> = {
@@ -42,4 +43,7 @@ export const TERMS = {
   yours: 'Yours', // tag on a task the user added
   roadmapWeek: 'Roadmap week',
   achievements: 'Achievements',
+  requirement: 'Engineering requirements',
+  deliverable: 'Deliverables',
+  reading: 'Reading this week',
 } as const;

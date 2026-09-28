@@ -1,9 +1,10 @@
 import { useId, useState, type FormEvent } from 'react';
-import { useStore, type ProjectStatus } from '@/store/useStore';
-import { PROJECTS, type ProjectDef } from '@/data/roadmap';
+import { useStore, type ProjectMilestone, type ProjectStatus } from '@/store/useStore';
+import { PROJECTS, type ProjectDef, type ProjectMilestoneKind } from '@/data/roadmap';
 import { projectProgress, projectState, weekRange } from '@/lib/derive';
 import { fmtDate } from '@/lib/date';
-import { STATUS_LABEL } from '@/lib/labels';
+import { milestoneKey } from '@/lib/keys';
+import { STATUS_LABEL, TERMS } from '@/lib/labels';
 import { useDraft } from '@/lib/useDraft';
 import { deleteMilestoneWithUndo } from '@/lib/undo';
 import { PageHead, ProgressBar, StatusPill, Vi, WeekLink, toast } from '@/components/ui';
@@ -14,7 +15,7 @@ const PROJECT_STATUSES: ProjectStatus[] = ['not-started', 'in-progress', 'done']
 export default function Projects() {
   return (
     <>
-      <PageHead title="Side projects" subtitle="Four portfolio projects, one per phase. Milestones start from the roadmap requirements; add your own as the scope firms up." />
+      <PageHead title="Side projects" subtitle="Four flagship projects, one per phase. The engineering requirements and interview deliverables from the roadmap are the milestones; add your own as the scope firms up." />
       <div className="stack">
         {PROJECTS.map((p) => (
           <ProjectCard key={p.id} def={p} />
@@ -53,6 +54,14 @@ function ProjectCard({ def }: { def: ProjectDef }) {
     toast('Milestone added.');
   };
 
+  const byKind = (kind: ProjectMilestoneKind): ProjectMilestone[] =>
+    def.milestones.filter((m) => m.kind === kind).map((m) => st.milestones.find((x) => x.id === milestoneKey(def.id, m.id))!).filter(Boolean);
+  const groups: { title: string; items: ProjectMilestone[] }[] = [
+    { title: TERMS.requirement, items: byKind('requirement') },
+    { title: TERMS.deliverable, items: byKind('deliverable') },
+    { title: TERMS.yours, items: st.milestones.filter((m) => m.custom) },
+  ];
+
   return (
     <div className="card project-card" id={def.id}>
       <div className="project-head">
@@ -70,11 +79,16 @@ function ProjectCard({ def }: { def: ProjectDef }) {
       </div>
 
       <p className="section-sm">
-        <strong>Goal:</strong> <Vi>{def.goal}</Vi>
+        <strong>Problem:</strong> <Vi>{def.problem}</Vi>
       </p>
-      <p className="req">
-        <strong>Requirements:</strong> <Vi>{def.requirements}</Vi>
-      </p>
+      <div className="row section-xs" aria-label="Tech stack">
+        <strong className="small">Stack:</strong>
+        {def.stack.split(',').map((s) => (
+          <span key={s.trim()} className="pill">
+            {s.trim()}
+          </span>
+        ))}
+      </div>
 
       <div className="project-controls">
         <div className="field">
@@ -104,21 +118,28 @@ function ProjectCard({ def }: { def: ProjectDef }) {
       <div className="section-xs section-xs-b">
         <ProgressBar done={pp.done} total={pp.total} label={`${def.title} milestones`} valueText={`${pp.done} of ${pp.total} milestones`} />
       </div>
-      <ul className="checklist">
-        {st.milestones.map((m) => (
-          <li key={m.id} className={m.done ? 'done' : ''}>
-            <label>
-              <input type="checkbox" checked={m.done} onChange={() => toggleMilestone(def.id, m.id)} />
-              <span>{m.custom ? m.title : <Vi>{m.title}</Vi>}</span>
-            </label>
-            {m.custom && (
-              <button className="btn sm ghost icon" onClick={() => deleteMilestoneWithUndo(def.id, m)} aria-label={`Remove milestone "${m.title}"`}>
-                <X size={14} />
-              </button>
-            )}
-          </li>
+      {groups
+        .filter((g) => g.items.length > 0)
+        .map((g) => (
+          <div key={g.title} className="section-xs">
+            <div className="label small ink-2">{g.title}</div>
+            <ul className="checklist">
+              {g.items.map((m) => (
+                <li key={m.id} className={m.done ? 'done' : ''}>
+                  <label>
+                    <input type="checkbox" checked={m.done} onChange={() => toggleMilestone(def.id, m.id)} />
+                    <span>{m.custom ? m.title : <Vi>{m.title}</Vi>}</span>
+                  </label>
+                  {m.custom && (
+                    <button className="btn sm ghost icon" onClick={() => deleteMilestoneWithUndo(def.id, m)} aria-label={`Remove milestone "${m.title}"`}>
+                      <X size={14} />
+                    </button>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
         ))}
-      </ul>
       <form className="inline-add" onSubmit={submitMs}>
         <input type="text" className="input" value={newMs} onChange={(e) => setNewMs(e.target.value)} placeholder="Add a milestone…" aria-label={`New milestone for ${def.title}`} />
         <button className="btn" type="submit">

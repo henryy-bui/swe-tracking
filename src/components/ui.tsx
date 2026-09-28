@@ -126,7 +126,7 @@ export function StatTile({ label, value, sub, srValue }: { label: string; value:
 }
 
 /* ---------- Status pill (icon + text, never color alone) ---------- */
-const STATUS_ICON = { done: Check, 'in-progress': CircleDot, 'not-started': Circle, skipped: Minus } as const;
+const STATUS_ICON = { done: Check, 'in-progress': CircleDot, 'not-started': Circle, skipped: Minus, blocked: AlertTriangle } as const;
 
 export function StatusPill({ status }: { status: Status }) {
   const Icon = STATUS_ICON[status];

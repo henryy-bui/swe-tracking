@@ -1,5 +1,6 @@
 /* Read-only computations over roadmap + persisted data. */
 import { TOTAL_WEEKS, phaseById, projectById, weekDef, type ProjectId } from '@/data/roadmap';
+import { dsaLabel } from '@/data/dsa';
 import type { AppData, FollowUp, Problem, ProjectMark, ProjectMilestone, ResourceMark } from '@/store/useStore';
 import { addDays, diffDays, today, weekStart } from '@/lib/date';
 import { clamp } from '@/lib/format';
@@ -18,8 +19,8 @@ export interface TaskItem {
 /* All checkable items of a week, in display order: roadmap tasks, DSA, then the user's own tasks. */
 export const taskItems = (data: AppData, week: number): TaskItem[] => {
   const w = weekDef(week);
-  const items: TaskItem[] = w.tasks.map((label, i) => ({ key: taskKey(week, i), label, kind: 'task' }));
-  items.push({ key: dsaKey(week), label: w.dsa, kind: 'dsa' });
+  const items: TaskItem[] = w.tasks.map((t) => ({ key: taskKey(week, t.id), label: t.text, kind: 'task' }));
+  items.push({ key: dsaKey(week), label: dsaLabel(w.dsa), kind: 'dsa' });
   for (const c of data.customTasks[String(week)] ?? []) items.push({ key: customKey(week, c.id), label: c.title, kind: 'custom', customId: c.id });
   return items;
 };
@@ -36,13 +37,59 @@ export const weekProgress = (data: AppData, week: number): Progress => {
   return { done: items.filter((it) => isDone(data, it.key)).length, total: items.length };
 };
 
+/* Skipped and Blocked are manual flags; the rest follows the checkboxes. */
 export const weekStatus = (data: AppData, week: number): WeekStatus => {
-  if (data.weekStatus[String(week)] === 'skipped') return 'skipped';
+  const flag = data.weekStatus[String(week)];
+  if (flag === 'skipped') return 'skipped';
+  if (flag === 'blocked') return 'blocked';
   const { done, total } = weekProgress(data, week);
   if (done === total) return 'done';
   if (done > 0) return 'in-progress';
   return 'not-started';
 };
+
+export interface StatusCounts {
+  done: number;
+  inProgress: number;
+  notStarted: number;
+  blocked: number;
+  skipped: number;
+  total: number;
+  pct: number; // done / total, 0-100
+}
+
+/* The dashboard's week counts by status, overall or for one phase. */
+export const weekStatusCounts = (data: AppData, phaseId?: number): StatusCounts => {
+  const [from, to] = phaseId ? phaseById(phaseId).weeks : [1, TOTAL_WEEKS];
+  const c: StatusCounts = { done: 0, inProgress: 0, notStarted: 0, blocked: 0, skipped: 0, total: to - from + 1, pct: 0 };
+  for (let w = from; w <= to; w++) {
+    const st = weekStatus(data, w);
+    if (st === 'done') c.done++;
+    else if (st === 'in-progress') c.inProgress++;
+    else if (st === 'blocked') c.blocked++;
+    else if (st === 'skipped') c.skipped++;
+    else c.notStarted++;
+  }
+  c.pct = c.total ? Math.round((c.done / c.total) * 100) : 0;
+  return c;
+};
+
+/* The week to show when no start date decides it: the first week in progress, else the first
+   untouched week after the last finished one, else week 1. */
+export const focusWeek = (data: AppData): number => {
+  const cw = currentWeek(data);
+  if (cw) return cw;
+  let lastDone = 0;
+  for (let w = 1; w <= TOTAL_WEEKS; w++) {
+    const st = weekStatus(data, w);
+    if (st === 'in-progress') return w;
+    if (st === 'done' || st === 'skipped') lastDone = w;
+  }
+  return Math.min(TOTAL_WEEKS, lastDone + 1);
+};
+
+/* Weeks the user has taken out of the plan; they do not count against pace. */
+const isFlagged = (data: AppData, week: number): boolean => !!data.weekStatus[String(week)];
 
 export interface PhaseProgress extends Progress {
   weeksDone: number;
@@ -110,8 +157,8 @@ export const expectedDone = (data: AppData): number | null => {
   const cw = Math.floor(days / 7) + 1;
   const frac = ((days % 7) + 1) / 7;
   let expected = 0;
-  for (let w = 1; w < cw; w++) expected += weekProgress(data, w).total;
-  expected += weekProgress(data, cw).total * frac;
+  for (let w = 1; w < cw; w++) if (!isFlagged(data, w)) expected += weekProgress(data, w).total;
+  if (!isFlagged(data, cw)) expected += weekProgress(data, cw).total * frac;
   return Math.round(expected);
 };
 
@@ -259,10 +306,10 @@ export const projectState = (data: AppData, id: ProjectId): ProjectMark => {
   const def = projectById(id);
   const saved = data.projects[id] ?? {};
   const savedMs = saved.milestones ?? [];
-  const base: ProjectMilestone[] = def.milestones.map((title, i) => {
-    const key = milestoneKey(id, i);
-    const found = savedMs.find((m) => m.id === key);
-    return { id: key, title, done: !!found?.done, custom: false };
+  const base: ProjectMilestone[] = def.milestones.map((m) => {
+    const key = milestoneKey(id, m.id);
+    const found = savedMs.find((x) => x.id === key);
+    return { id: key, title: m.title, done: !!found?.done, custom: false };
   });
   const custom = savedMs.filter((m) => m.custom);
   return {

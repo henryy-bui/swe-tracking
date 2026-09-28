@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import { useStore } from '@/store/useStore';
 import { TOTAL_WEEKS, weekDef } from '@/data/roadmap';
-import { currentWeek, dueProblems, minutesInRange, minutesThisWeek, openFollowUps, planStatus, sortFollowUps, streak, weekProgress, weekRange } from '@/lib/derive';
+import { currentWeek, dueProblems, focusWeek, minutesInRange, minutesThisWeek, openFollowUps, planStatus, sortFollowUps, streak, weekProgress, weekRange } from '@/lib/derive';
 import { diffDays, fmtDateWeekday, fmtRange, today } from '@/lib/date';
 import { fmtHours, pct, plural } from '@/lib/format';
 import { TERMS } from '@/lib/labels';
@@ -19,7 +19,7 @@ export default function Today() {
   const t = today();
   const status = planStatus(data);
   const cw = currentWeek(data);
-  const week = cw ?? 1;
+  const week = focusWeek(data);
   const wp = weekProgress(data, week);
   const range = weekRange(data, week);
   const plan = week > 1 ? data.retros[String(week - 1)]?.plan : undefined;
@@ -38,7 +38,7 @@ export default function Today() {
           <div className="banner">
             <div className="grow">
               <strong>No start date yet.</strong>
-              <div className="small">Today shows week 1 until you pick the day week 1 begins.</div>
+              <div className="small">Today shows the week you are working on until you pick the day week 1 begins.</div>
             </div>
             <Link to="/settings" className="btn primary">
               Set start date
@@ -50,7 +50,7 @@ export default function Today() {
           <StatTile label="Logged today" value={fmtHours(todayMin)} sub={todayMin > 0 ? 'Keep going' : 'Nothing yet today'} />
           <StatTile label="This calendar week" value={fmtHours(weekMin)} sub={targetMin > 0 ? `${pct(weekMin, targetMin)}% of ${data.weeklyTargetHours}h target` : 'No target set'} />
           <StatTile label="Streak" value={plural(days, 'day')} sub={days > 0 ? 'Days in a row with activity' : 'Tick a task or log a session'} />
-          <StatTile label={cw ? `Week ${cw} of ${TOTAL_WEEKS}` : 'Week 1 preview'} value={`${wp.done}/${wp.total}`} sub={range ? `Day ${diffDays(range.start, t) + 1} of 7 · ${fmtRange(range)}` : `${TERMS.tasks} done`} />
+          <StatTile label={cw ? `Week ${cw} of ${TOTAL_WEEKS}` : `Week ${week} preview`} value={`${wp.done}/${wp.total}`} sub={range ? `Day ${diffDays(range.start, t) + 1} of 7 · ${fmtRange(range)}` : `${TERMS.tasks} done`} />
         </div>
 
         <div className="grid-2">

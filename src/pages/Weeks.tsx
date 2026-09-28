@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useStore } from '@/store/useStore';
 import { PHASES, WEEKS } from '@/data/roadmap';
+import { dsaLabel } from '@/data/dsa';
 import { currentWeek, phaseProgress, weekProgress, weekRange, weekStatus } from '@/lib/derive';
 import { fmtRange } from '@/lib/date';
 import { pct } from '@/lib/format';
@@ -78,7 +79,10 @@ export default function Weeks() {
                       </div>
                       <div className="dates" id={`week-${w.week}-meta`}>
                         {range ? `${fmtRange(range)} · ` : ''}
-                        DSA: <Vi>{w.dsa}</Vi>
+                        DSA: <Vi>{dsaLabel(w.dsa)}</Vi>
+                      </div>
+                      <div className="dates">
+                        Reading: <Vi>{w.reading}</Vi>
                       </div>
                     </div>
                     <div className="right">

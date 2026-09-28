@@ -53,7 +53,9 @@ export const buildIcs = (data: AppData, opts: IcsOptions = { weeks: true, follow
       const r = weekRange(data, w)!;
       const def = weekDef(w);
       const tasks = taskItems(data, w).map((t) => `• ${t.label}`).join('\n');
-      lines.push(...event({ uid: `week-${w}`, start: r.start, end: r.end, summary: `Week ${w}: ${def.topic}`, description: `Phase ${phaseOfWeek(w).id} · ${phaseOfWeek(w).title}\n${tasks}` }, stamp));
+      const link = data.weekLinks[String(w)];
+      const extra = `${def.reading ? `\nReading: ${def.reading}` : ''}${link ? `\nCode: ${link}` : ''}`;
+      lines.push(...event({ uid: `week-${w}`, start: r.start, end: r.end, summary: `Week ${w}: ${def.topic}`, description: `Phase ${phaseOfWeek(w).id} · ${phaseOfWeek(w).title}\n${tasks}${extra}` }, stamp));
     }
   }
   if (opts.followUps) {

@@ -3,7 +3,7 @@ import { PHASES, PROJECTS, RESOURCES, TOTAL_WEEKS, phaseOfWeek, weekDef } from '
 import type { AppData } from '@/store/useStore';
 import {
   isDone, minutesForRoadmapWeek, overallProgress, phaseProgress, projectProgress, projectState, resourceState, streak, taskItems, totalMinutes,
-  weekProgress, weekRange, weekStatus,
+  weekProgress, weekRange, weekStatus, weekStatusCounts,
 } from '@/lib/derive';
 import { fmtDateFull, fmtRange, today } from '@/lib/date';
 import { fmtHours, pct } from '@/lib/format';
@@ -30,6 +30,8 @@ export const weekSummaryMarkdown = (data: AppData, week: number): string => {
   md += line(`Phase ${phase.id} · ${phase.title}${range ? ` · ${fmtRange(range)}` : ''}`);
   md += line();
   md += line(`**Status:** ${STATUS_LABEL[weekStatus(data, week)]} · ${wp.done}/${wp.total} tasks · ${fmtHours(minutes)} logged in ${sessions.length} session${sessions.length === 1 ? '' : 's'}`);
+  if (def.reading) md += line(`**Reading:** ${def.reading}`);
+  if (data.weekLinks[String(week)]) md += line(`**Code:** ${data.weekLinks[String(week)]}`);
   md += line();
   md += line('## Checklist');
   for (const it of items) md += line(`- [${isDone(data, it.key) ? 'x' : ' '}] ${it.kind === 'dsa' ? 'DSA: ' : ''}${it.label}`);
@@ -77,13 +79,16 @@ export const progressReportMarkdown = (data: AppData): string => {
   md += line(`- Study time: **${fmtHours(hours)}** across ${data.logs.length} sessions · current streak ${streak(data)} days`);
   md += line(`- DSA: ${solved} solved of ${problems.length} tracked`);
   md += line(`- Follow-ups: ${data.followUps.filter((f) => f.done).length} closed, ${data.followUps.filter((f) => !f.done).length} open`);
+  const sc = weekStatusCounts(data);
+  md += line(`- Weeks by status: ${sc.done} done · ${sc.inProgress} in progress · ${sc.notStarted} not started · ${sc.blocked} blocked · ${sc.skipped} skipped`);
   md += line();
   md += line('## Phases');
-  md += line('| Phase | Weeks | Items | Progress |');
-  md += line('|---|---|---|---|');
+  md += line('| Phase | Weeks done | In progress | Blocked | Items | Progress |');
+  md += line('|---|---|---|---|---|---|');
   for (const p of PHASES) {
     const pp = phaseProgress(data, p.id);
-    md += line(`| ${p.id}. ${p.title} | ${pp.weeksDone}/${pp.weeks} | ${pp.done}/${pp.total} | ${pct(pp.done, pp.total)}% |`);
+    const c = weekStatusCounts(data, p.id);
+    md += line(`| ${p.id}. ${p.title} | ${pp.weeksDone}/${pp.weeks} | ${c.inProgress} | ${c.blocked} | ${pp.done}/${pp.total} | ${pct(pp.done, pp.total)}% |`);
   }
   md += line();
   md += line('## Weeks');

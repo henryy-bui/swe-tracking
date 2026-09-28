@@ -11,7 +11,7 @@
 import { create } from 'zustand';
 import type { RealtimeChannel, Session, SupabaseClient, User } from '@supabase/supabase-js';
 import { getSupabase, isCloudConfigured, TABLE } from '@/lib/supabase';
-import { pickData, useStore, type AppData } from '@/store/useStore';
+import { DATA_VERSION, pickData, useStore, type AppData } from '@/store/useStore';
 
 export type SyncStatus = 'disabled' | 'signed-out' | 'syncing' | 'synced' | 'offline' | 'error';
 
@@ -131,6 +131,10 @@ const fetchNewer = async (userId: string, since: string | null): Promise<Row | n
 };
 
 const pushLocal = async (userId: string): Promise<void> => {
+  if (remoteIsNewerBuild) {
+    setSync({ status: 'error', error: 'Another device runs a newer version of the app. Update the app on this device to keep syncing.', pending: true });
+    return;
+  }
   const local = pickData(useStore.getState());
   const updatedAt = local.updatedAt ?? new Date().toISOString();
   const hash = hashDoc(local);
@@ -148,7 +152,17 @@ const pushLocal = async (userId: string): Promise<void> => {
   setSync({ status: 'synced', lastSyncedAt: new Date().toISOString(), error: null, pending: false });
 };
 
+/* A document written by a newer build. Applying it is fine (migrateData keeps unknown fields), but this
+   build must not push over it, or the newer device's data would be downgraded. */
+let remoteIsNewerBuild = false;
+
 const applyRemote = (userId: string, row: Row, source: 'pull' | 'realtime') => {
+  const remoteVersion = Number(row.data?.version) || 0;
+  if (remoteVersion > DATA_VERSION) {
+    remoteIsNewerBuild = true;
+    setSync({ status: 'error', error: 'Another device runs a newer version of the app. Update the app on this device to keep syncing.', pending: false });
+    return;
+  }
   applyingRemote = true;
   try {
     useStore.getState().applyRemote(row.data, row.updated_at);

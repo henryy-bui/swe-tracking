@@ -1,7 +1,8 @@
 import { useId, useState, type FormEvent } from 'react';
 import { Link, Navigate, useParams } from 'react-router-dom';
-import { useStore, type AppData } from '@/store/useStore';
-import { TOTAL_WEEKS, phaseOfWeek, projectById, weekDef } from '@/data/roadmap';
+import { useStore, type AppData, type WeekFlag } from '@/store/useStore';
+import { TOTAL_WEEKS, phaseOfWeek, projectById, resourceById, weekDef } from '@/data/roadmap';
+import { seedCandidates, seedProblems, seedState } from '@/lib/dsaSeed';
 import { currentWeek, sessionsForWeek, sortFollowUps, taskItems, weekProgress, weekRange, weekStatus } from '@/lib/derive';
 import { fmtDate, fmtRange } from '@/lib/date';
 import { fmtHours, plural } from '@/lib/format';
@@ -11,13 +12,13 @@ import { rovingKey } from '@/lib/useA11y';
 import { downloadText } from '@/lib/download';
 import { weekSummaryMarkdown } from '@/lib/report';
 import { deleteLogWithUndo } from '@/lib/undo';
-import { EmptyState, MilestoneBadge, MoreLink, PageHead, ProgressBar, Stars, StatusPill, toast } from '@/components/ui';
+import { EmptyState, MilestoneBadge, MoreLink, PageHead, ProgressBar, Stars, StatusPill, Vi, toast } from '@/components/ui';
 import { TaskChecklist } from '@/components/TaskChecklist';
 import { LogSessionForm } from '@/components/LogSessionForm';
 import { FollowUpForm } from '@/components/FollowUpForm';
 import { FollowUpRow } from '@/components/FollowUpRow';
 import { SessionRow } from '@/components/SessionRow';
-import { ChevronLeft, ChevronRight, Copy, Download, Star } from '@/components/icons';
+import { Check, ChevronLeft, ChevronRight, Circle, CircleDot, Copy, Download, Star } from '@/components/icons';
 
 export default function WeekDetail() {
   const { n } = useParams();
@@ -50,6 +51,7 @@ function WeekBody({ week }: { week: number }) {
       <div className="grid-2">
         <div className="stack">
           <WeekChecklistCard data={data} week={week} />
+          <WeekDsaCard data={data} week={week} />
           <WeekNotesCard data={data} week={week} />
           <WeekRetroCard data={data} week={week} />
         </div>
@@ -100,7 +102,7 @@ function WeekNav({ week }: { week: number }) {
 
 function WeekChecklistCard({ data, week }: { data: AppData; week: number }) {
   const setWeekTasks = useStore((s) => s.setWeekTasks);
-  const toggleSkipWeek = useStore((s) => s.toggleSkipWeek);
+  const setWeekFlag = useStore((s) => s.setWeekFlag);
   const addCustomTask = useStore((s) => s.addCustomTask);
   const def = weekDef(week);
   const items = taskItems(data, week);
@@ -126,9 +128,12 @@ function WeekChecklistCard({ data, week }: { data: AppData; week: number }) {
     setWeekTasks(week, items.map((i) => i.key), false);
     toast(`Week ${week} cleared.`);
   };
-  const toggleSkip = () => {
-    toggleSkipWeek(week);
-    toast(st === 'skipped' ? `Week ${week} resumed.` : `Week ${week} skipped. Skipped weeks don't count against your pace.`);
+  const flag = data.weekStatus[String(week)];
+  const setFlag = (next: WeekFlag | null) => {
+    setWeekFlag(week, next);
+    if (!next) toast(`Week ${week} resumed.`);
+    else if (next === 'skipped') toast(`Week ${week} skipped. Skipped weeks don't count against your pace.`);
+    else toast(`Week ${week} blocked. Note what is blocking it in a follow-up.`);
   };
 
   return (
@@ -156,6 +161,24 @@ function WeekChecklistCard({ data, week }: { data: AppData; week: number }) {
           <MoreLink to="/projects">{projectById(def.milestone.project).title}</MoreLink>
         </div>
       )}
+      <div className="reading section-sm">
+        <span className="label">{TERMS.reading}</span>
+        <div className="small">
+          <Vi>{def.reading}</Vi>
+        </div>
+        {def.readingRefs && def.readingRefs.length > 0 && (
+          <div className="row small section-xs">
+            {def.readingRefs.map((id) => {
+              const r = resourceById(id);
+              return r ? (
+                <Link key={id} to={`/resources#${id}`} className="pill">
+                  {r.title}
+                </Link>
+              ) : null;
+            })}
+          </div>
+        )}
+      </div>
       <div className="section-sm">
         <TaskChecklist week={week} showDates deletable />
       </div>
@@ -175,20 +198,84 @@ function WeekChecklistCard({ data, week }: { data: AppData; week: number }) {
             Untick all
           </button>
         )}
-        <button className="btn sm ghost" onClick={toggleSkip} title="Skipped weeks don't count against your pace">
-          {st === 'skipped' ? 'Resume week' : 'Skip week'}
-        </button>
+        {flag ? (
+          <button className="btn sm ghost" onClick={() => setFlag(null)}>
+            Resume week
+          </button>
+        ) : (
+          <>
+            <button className="btn sm ghost" onClick={() => setFlag('skipped')} title="Skipped weeks don't count against your pace">
+              Skip week
+            </button>
+            <button className="btn sm ghost" onClick={() => setFlag('blocked')} title="Mark the week as blocked; it stays in the plan but is flagged">
+              Block week
+            </button>
+          </>
+        )}
         <span className="small ink-3 push-end">{minutes > 0 ? `${fmtHours(minutes)} logged` : 'No time logged yet'}</span>
       </div>
     </div>
   );
 }
 
+function WeekDsaCard({ data, week }: { data: AppData; week: number }) {
+  const def = weekDef(week);
+  const candidates = seedCandidates(data, week);
+  if (def.dsa.problems.length === 0) return null;
+  const add = () => {
+    const n = seedProblems(candidates);
+    toast(`${plural(n, 'problem')} added to DSA.`);
+  };
+  return (
+    <div className="card">
+      <div className="card-head">
+        <h2>DSA this week</h2>
+        <MoreLink to="/dsa">All problems</MoreLink>
+      </div>
+      <div className="small ink-2 section-xs-b">
+        <Vi>{def.dsa.pattern}</Vi>
+      </div>
+      <ul className="list compact">
+        {def.dsa.problems.map((title) => {
+          const st = seedState(data, week, title);
+          const Icon = st === 'solved' ? Check : st === 'todo' ? CircleDot : Circle;
+          return (
+            <li key={title} className={st === 'solved' ? 'done' : ''}>
+              <div className="body">
+                <div className="title row">
+                  <Icon size={14} />
+                  <span>{title}</span>
+                  <span className="small ink-3">{st === 'solved' ? 'solved' : st === 'todo' ? 'in your list' : 'not added'}</span>
+                </div>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+      <div className="row section-sm">
+        {candidates.length > 0 ? (
+          <button className="btn sm" onClick={add}>
+            Add {plural(candidates.length, 'problem')} to DSA
+          </button>
+        ) : (
+          <span className="small ink-3">All of this week's problems are in your DSA list.</span>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function WeekNotesCard({ data, week }: { data: AppData; week: number }) {
+  const id = useId();
   const setWeekNote = useStore((s) => s.setWeekNote);
+  const setWeekLink = useStore((s) => s.setWeekLink);
   const [note, setNote, commit] = useDraft(data.weekNotes[String(week)] ?? '', (v) => {
     setWeekNote(week, v);
     toast('Notes saved.');
+  });
+  const [link, setLink, commitLink] = useDraft(data.weekLinks[String(week)] ?? '', (v) => {
+    setWeekLink(week, v);
+    toast(v.trim() ? 'Link saved.' : 'Link removed.');
   });
   return (
     <div className="card">
@@ -197,6 +284,17 @@ function WeekNotesCard({ data, week }: { data: AppData; week: number }) {
         <span className="hint">Saved when you leave the field</span>
       </div>
       <textarea value={note} onChange={(e) => setNote(e.target.value)} onBlur={commit} placeholder="Key takeaways, links, questions, what to revisit…" rows={7} aria-label={`Notes for week ${week}`} />
+      <div className="field section-sm">
+        <label htmlFor={`${id}-link`}>Code / LeetCode link</label>
+        <input id={`${id}-link`} type="url" value={link} onChange={(e) => setLink(e.target.value)} onBlur={commitLink} placeholder="https://github.com/you/repo/tree/week-1" />
+        {data.weekLinks[String(week)] && (
+          <span className="hint">
+            <a href={data.weekLinks[String(week)]} target="_blank" rel="noreferrer">
+              Open link<span className="sr-only"> (opens in a new tab)</span>
+            </a>
+          </span>
+        )}
+      </div>
     </div>
   );
 }
@@ -377,6 +475,17 @@ function WeekSummaryCard({ data, week }: { data: AppData; week: number }) {
         <dd>{plural(solved, 'problem')} solved</dd>
         <dt>Rating</dt>
         <dd>{rating ? <Stars rating={rating} size={13} /> : '—'}</dd>
+        {data.weekLinks[String(week)] && (
+          <>
+            <dt>Code</dt>
+            <dd>
+              <a href={data.weekLinks[String(week)]} target="_blank" rel="noreferrer">
+                {data.weekLinks[String(week)].replace(/^https?:\/\//, '')}
+                <span className="sr-only"> (opens in a new tab)</span>
+              </a>
+            </dd>
+          </>
+        )}
       </dl>
       <div className="row section-sm">
         <button className="btn" onClick={copy}>

@@ -549,6 +549,11 @@ textarea {
   color: var(--muted);
   text-decoration: line-through;
 }
+.pill.blocked {
+  background: var(--critical-soft);
+  color: var(--critical-text);
+  border-color: var(--critical-text);
+}
 .badge {
   display: inline-flex;
   min-width: 20px;
@@ -1882,5 +1887,101 @@ input[type='checkbox'] {
   .nav a.active,
   .tabbar .active {
     outline: 2px solid Highlight;
+  }
+}
+
+/* ---------- Status donut ---------- */
+.donut {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+.donut svg {
+  flex: 0 0 auto;
+}
+.donut .seg-track {
+  stroke: var(--surface-3);
+}
+.donut .seg-done,
+.donut .swatch.seg-done {
+  stroke: var(--good-text);
+  background: var(--good-text);
+}
+.donut .seg-progress,
+.donut .swatch.seg-progress {
+  stroke: var(--accent);
+  background: var(--accent);
+}
+.donut .seg-blocked,
+.donut .swatch.seg-blocked {
+  stroke: var(--critical);
+  background: var(--critical);
+}
+.donut .seg-skipped,
+.donut .swatch.seg-skipped {
+  stroke: var(--muted);
+  background: var(--muted);
+}
+.donut .seg-rest,
+.donut .swatch.seg-rest {
+  stroke: var(--surface-3);
+  background: var(--surface-3);
+}
+.donut-value {
+  font-family: var(--font-display, 'Lora', serif);
+  font-size: 26px;
+  fill: var(--ink);
+}
+.donut-legend {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+  min-width: 160px;
+  flex: 1 1 160px;
+}
+.donut-legend li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+.donut-legend .swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  flex: 0 0 auto;
+}
+.donut-legend .grow {
+  flex: 1;
+}
+
+/* ---------- Week reading line ---------- */
+.reading .label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-2);
+  margin-bottom: 2px;
+}
+.reading a.pill {
+  text-decoration: none;
+}
+.list.compact li {
+  padding-block: 6px;
+}
+
+/* A row that was just linked to (Resources page anchors). */
+.flash {
+  animation: flash 1.6s ease-out;
+}
+@keyframes flash {
+  0% {
+    box-shadow: 0 0 0 3px var(--accent-soft);
+  }
+  100% {
+    box-shadow: 0 0 0 0 transparent;
   }
 }

@@ -5,6 +5,8 @@ import { useUi } from '@/store/ui';
 import { useTheme } from '@/store/theme';
 import { buildIndex, groupResults, KIND_LABEL, search, type SearchResult } from '@/lib/search';
 import { currentWeek } from '@/lib/derive';
+import { seedCandidates, seedProblems } from '@/lib/dsaSeed';
+import { plural } from '@/lib/format';
 import { downloadBackup } from '@/lib/download';
 import { toggleTimer } from '@/lib/session';
 import { MOD_KEY } from '@/lib/platform';
@@ -72,6 +74,19 @@ export function CommandPalette() {
         downloadBackup();
         toast('Backup downloaded.');
         break;
+      case 'seed-dsa': {
+        const state = useStore.getState();
+        const cw = currentWeek(state);
+        if (!cw) {
+          navigate('/settings');
+          toast('Set a start date in Settings to know which week is current.');
+          break;
+        }
+        const n = seedProblems(seedCandidates(state, cw));
+        navigate('/dsa');
+        toast(n ? `${plural(n, 'problem')} from week ${cw} added to DSA.` : `Week ${cw}'s problems are already in your list.`);
+        break;
+      }
     }
   };
 
